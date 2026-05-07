@@ -15,7 +15,7 @@ const plugin: JupyterFrontEndPlugin<void> = {
   activate: (app: JupyterFrontEnd) => {
     console.log('JupyterLab extension jupyter-mcp-manager is activated!');
 
-    requestAPI<any>('hello', app.serviceManager.serverSettings)
+    requestAPI<any>('servers', app.serviceManager.serverSettings)
       .then(data => {
         console.log(data);
       })
