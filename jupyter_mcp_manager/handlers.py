@@ -6,6 +6,7 @@ import json
 from jupyter_server.base.handlers import APIHandler
 import tornado
 
+
 class McpServersHandler(APIHandler):
     """Handler for getting all configured MCP servers."""
 
@@ -17,13 +18,109 @@ class McpServersHandler(APIHandler):
             manager.clear_cache()
         settings = manager.get_settings()
 
-        # Convert to JSON-serializable format
-        servers = [server.model_dump() for server in settings.mcp_servers]
+        # Get user-level servers to mark them as editable
+        user_servers = manager.get_user_servers()
+        user_server_names = {s.get("name") for s in user_servers}
+
+        # Convert to JSON-serializable format with editable flag
+        servers = []
+        for server in settings.mcp_servers:
+            server_dict = server.model_dump()
+            server_dict["editable"] = server.name in user_server_names
+            servers.append(server_dict)
 
         self.finish(json.dumps({
             "mcp_servers": servers,
-            "count": len(settings.mcp_servers)
+            "count": len(servers),
+            "user_config_path": manager.get_user_config_path()
         }))
+
+    @tornado.web.authenticated
+    def post(self):
+        """Save user-level MCP server configurations."""
+        manager = self.settings["mcp_manager"]
+
+        try:
+            body = json.loads(self.request.body.decode('utf-8'))
+        except json.JSONDecodeError:
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Invalid JSON body"}))
+            return
+
+        if "mcp_servers" not in body:
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Missing mcp_servers field"}))
+            return
+
+        servers = body["mcp_servers"]
+        if manager.save_user_config(servers):
+            self.finish(json.dumps({"status": "ok", "message": "Configuration saved"}))
+        else:
+            self.set_status(500)
+            self.finish(json.dumps({"error": "Failed to save configuration"}))
+
+    @tornado.web.authenticated
+    def put(self):
+        """Update or add a specific MCP server in user configuration."""
+        manager = self.settings["mcp_manager"]
+
+        try:
+            body = json.loads(self.request.body.decode('utf-8'))
+        except json.JSONDecodeError:
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Invalid JSON body"}))
+            return
+
+        if "name" not in body:
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Missing server name"}))
+            return
+
+        user_servers = manager.get_user_servers()
+        server_name = body["name"]
+
+        # Find existing server by name
+        existing_index = None
+        for i, server in enumerate(user_servers):
+            if server.get("name") == server_name:
+                existing_index = i
+                break
+
+        if existing_index is not None:
+            user_servers[existing_index] = body
+        else:
+            user_servers.append(body)
+
+        if manager.save_user_config(user_servers):
+            self.finish(json.dumps({"status": "ok", "message": "Server updated"}))
+        else:
+            self.set_status(500)
+            self.finish(json.dumps({"error": "Failed to save server"}))
+
+    @tornado.web.authenticated
+    def delete(self):
+        """Delete a specific MCP server from user configuration."""
+        manager = self.settings["mcp_manager"]
+
+        server_name = self.get_query_argument("name", default=None)
+        if not server_name:
+            self.set_status(400)
+            self.finish(json.dumps({"error": "Missing server name parameter"}))
+            return
+
+        user_servers = manager.get_user_servers()
+        new_servers = [s for s in user_servers if s.get("name") != server_name]
+
+        if len(new_servers) == len(user_servers):
+            self.set_status(404)
+            self.finish(json.dumps({"error": f"Server '{server_name}' not found in user config"}))
+            return
+
+        if manager.save_user_config(new_servers):
+            self.finish(json.dumps({"status": "ok", "message": "Server deleted"}))
+        else:
+            self.set_status(500)
+            self.finish(json.dumps({"error": "Failed to delete server"}))
 
 
 class McpServerHandler(APIHandler):

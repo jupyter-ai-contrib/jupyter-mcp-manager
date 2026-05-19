@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MCP Server Settings",
+  "description": "Configure MCP servers for JupyterLab.",
+  "type": "object",
+  "properties": {
+    "mcpSettings": {
+      "type": "object",
+      "properties": {
+        "mcp_servers": {
+          "title": "MCP Servers",
+          "description": "List of MCP server configurations.",
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "title": "Stdio Server",
+                "type": "object",
+                "required": ["name", "command"],
+                "properties": {
+                  "name": {
+                    "title": "Server Name",
+                    "description": "Unique identifier for this MCP server.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "title": "Type",
+                    "type": "string",
+                    "enum": ["stdio"],
+                    "default": "stdio"
+                  },
+                  "command": {
+                    "title": "Command",
+                    "description": "Path to the MCP server executable.",
+                    "type": "string"
+                  },
+                  "args": {
+                    "title": "Arguments",
+                    "description": "Command-line arguments for the MCP server.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "default": []
+                  },
+                  "env": {
+                    "title": "Environment Variables",
+                    "description": "Environment variables for the MCP server.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["name", "value"],
+                      "properties": {
+                        "name": { "title": "Variable Name", "type": "string" },
+                        "value": { "title": "Value", "type": "string" }
+                      }
+                    },
+                    "default": []
+                  },
+                  "editable": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "title": "HTTP Server",
+                "type": "object",
+                "required": ["name", "url"],
+                "properties": {
+                  "name": {
+                    "title": "Server Name",
+                    "description": "Unique identifier for this MCP server.",
+                    "type": "string"
+                  },
+                  "type": {
+                    "title": "Type",
+                    "type": "string",
+                    "enum": ["http"],
+                    "default": "http"
+                  },
+                  "url": {
+                    "title": "URL",
+                    "description": "URL to the MCP server endpoint.",
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "headers": {
+                    "title": "HTTP Headers",
+                    "description": "HTTP headers to include in requests.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["name", "value"],
+                      "properties": {
+                        "name": { "title": "Header Name", "type": "string" },
+                        "value": { "title": "Header Value", "type": "string" }
+                      }
+                    },
+                    "default": []
+                  },
+                  "editable": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "default": []
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

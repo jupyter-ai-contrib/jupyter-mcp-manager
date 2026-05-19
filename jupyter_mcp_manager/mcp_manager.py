@@ -182,6 +182,56 @@ class McpServerManager:
             self.extra_config_paths.append(file_path)
         self.clear_cache()
 
+    def get_user_config_path(self) -> str:
+        """Get the user-level config file path for MCP servers."""
+        # Find the user config directory (last non-empty in the list)
+        user_config_dir = None
+        for config_dir in reversed(self.config_dirs):
+            if config_dir and os.path.exists(config_dir):
+                user_config_dir = config_dir
+                break
+        
+        if user_config_dir is None:
+            # Fallback to ~/.jupyter
+            user_config_dir = os.path.expanduser("~/.jupyter")
+            os.makedirs(user_config_dir, exist_ok=True)
+        
+        return os.path.join(user_config_dir, "mcp_servers.json")
+
+    def save_user_config(self, servers: List[dict]) -> bool:
+        """Save user-level MCP server configuration."""
+        config_path = self.get_user_config_path()
+        config = {"mcp_servers": servers}
+        
+        try:
+            config_dir = os.path.dirname(config_path)
+            os.makedirs(config_dir, exist_ok=True)
+            
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2)
+            
+            self.clear_cache()
+            if self.log:
+                self.log.info(f"Saved user MCP server configuration to {config_path}")
+            return True
+        except (IOError, OSError) as e:
+            if self.log:
+                self.log.error(f"Failed to save user MCP config to {config_path}: {e}")
+            return False
+
+    def get_user_servers(self) -> List[dict]:
+        """Get user-level MCP server configurations as raw dicts."""
+        config_path = self.get_user_config_path()
+        if not os.path.exists(config_path):
+            return []
+        
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+                return config.get("mcp_servers", [])
+        except (json.JSONDecodeError, IOError, OSError):
+            return []
+
 
 def get_mcp_manager(
     log=None,

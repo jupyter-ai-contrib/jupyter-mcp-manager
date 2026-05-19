@@ -3,3 +3,35 @@
 
     https://jupyterlab.readthedocs.io/en/stable/developer/css.html
 */
+
+.jp-mcp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.jp-mcp-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 2px solid var(--jp-border-color1);
+}
+
+.jp-mcp-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--jp-border-color2);
+}
+
+.jp-mcp-table input,
+.jp-mcp-table select {
+  width: 100%;
+}
+
+.jp-mcp-empty {
+  padding: 8px;
+  font-style: italic;
+}
+
+.jp-mcp-table .jp-Button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
