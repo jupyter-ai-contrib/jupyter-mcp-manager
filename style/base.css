@@ -26,8 +26,12 @@
 }
 
 .jp-mcp-empty {
-  padding: 8px;
   font-style: italic;
+  text-align: center;
+}
+
+.jp-mcp-table + .jp-ArrayOperationsButton {
+  margin-top: 4px;
 }
 
 .jp-mcp-table .jp-Button {
