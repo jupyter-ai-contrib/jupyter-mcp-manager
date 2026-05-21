@@ -21,18 +21,23 @@ class McpServersHandler(APIHandler):
         # Get user-level servers to mark them as editable
         user_servers = manager.get_user_servers()
         user_server_names = {s.get("name") for s in user_servers}
+        source_map = manager.get_server_source_map()
+        user_config_path = manager.get_user_config_path()
 
-        # Convert to JSON-serializable format with editable flag
+        # Convert to JSON-serializable format with editable and config_file flags
         servers = []
         for server in settings.mcp_servers:
             server_dict = server.model_dump()
-            server_dict["editable"] = server.name in user_server_names
+            is_editable = server.name in user_server_names
+            server_dict["editable"] = is_editable
+            server_dict["config_file"] = source_map.get(
+                server.name, user_config_path if is_editable else ""
+            )
             servers.append(server_dict)
 
         self.finish(json.dumps({
             "mcp_servers": servers,
-            "count": len(servers),
-            "user_config_path": manager.get_user_config_path()
+            "count": len(servers)
         }))
 
     @tornado.web.authenticated

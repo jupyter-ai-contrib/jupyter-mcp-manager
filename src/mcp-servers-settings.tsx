@@ -8,11 +8,19 @@ import {
   checkIcon,
   closeIcon,
   deleteIcon,
-  editIcon
+  editIcon,
+  settingsIcon
 } from '@jupyterlab/ui-components';
 
 import { requestAPI } from './request';
-import { IMcpServer, IMcpServerHttp, IMcpServerStdio } from './tokens';
+import {
+  IEnvVariable,
+  IHttpHeader,
+  IMcpServer,
+  IMcpServerEntry,
+  IMcpServerHttp,
+  IMcpServerStdio
+} from './tokens';
 
 interface IMcpServerPanelProps {
   settings: ISettingRegistry.ISettings;
@@ -21,28 +29,274 @@ interface IMcpServerPanelProps {
 }
 
 interface IServerTableProps {
-  servers: IMcpServer[];
+  servers: IMcpServerEntry[];
   onDelete: (name: string) => void;
   onSave: (server: IMcpServer) => void;
   trans: IRenderMime.TranslationBundle;
 }
 
 interface IRowProps {
-  server: IMcpServer;
+  server: IMcpServerEntry;
   isEditing: boolean;
   isNew?: boolean;
   onStartEdit: () => void;
   onSave: (server: IMcpServer) => void;
   onCancel: () => void;
   onDelete: (name: string) => void;
+  onOpenAdvanced: () => void;
   trans: IRenderMime.TranslationBundle;
 }
 
-const EMPTY_STDIO: IMcpServerStdio = {
+interface IAdvancedSettingsPopupProps {
+  server: IMcpServerEntry;
+  onClose: () => void;
+  onSave: (server: IMcpServer) => void;
+  trans: IRenderMime.TranslationBundle;
+}
+
+const EMPTY_STDIO: IMcpServerEntry = {
   name: '',
   type: 'stdio',
   command: '',
-  editable: true
+  editable: true,
+  config_file: ''
+};
+
+const AdvancedSettingsPopup: React.FC<IAdvancedSettingsPopupProps> = ({
+  server,
+  onClose,
+  onSave,
+  trans
+}) => {
+  const stdioServer =
+    server.type === 'stdio'
+      ? (server as IMcpServerStdio & IMcpServerEntry)
+      : null;
+  const httpServer =
+    server.type === 'http'
+      ? (server as IMcpServerHttp & IMcpServerEntry)
+      : null;
+  const isEditable = server.editable;
+
+  const [args, setArgs] = useState<string[]>(stdioServer?.args ?? []);
+  const [env, setEnv] = useState<IEnvVariable[]>(stdioServer?.env ?? []);
+  const [headers, setHeaders] = useState<IHttpHeader[]>(
+    httpServer?.headers ?? []
+  );
+
+  useEffect(() => {
+    setArgs(stdioServer?.args ?? []);
+    setEnv(stdioServer?.env ?? []);
+    setHeaders(httpServer?.headers ?? []);
+  }, [server]);
+
+  const handleSave = () => {
+    if (stdioServer) {
+      const { editable: _e, config_file: _c, ...base } = stdioServer;
+      onSave({ ...base, args, env });
+    } else if (httpServer) {
+      const { editable: _e, config_file: _c, ...base } = httpServer;
+      onSave({ ...base, headers });
+    }
+  };
+
+  const addArg = () => setArgs([...args, '']);
+  const updateArg = (i: number, value: string) => {
+    const next = [...args];
+    next[i] = value;
+    setArgs(next);
+  };
+  const removeArg = (i: number) => setArgs(args.filter((_, j) => j !== i));
+
+  const addEnv = () => setEnv([...env, { name: '', value: '' }]);
+  const updateEnv = (i: number, field: 'name' | 'value', value: string) => {
+    const next = [...env];
+    next[i] = { ...next[i], [field]: value };
+    setEnv(next);
+  };
+  const removeEnv = (i: number) => setEnv(env.filter((_, j) => j !== i));
+
+  const addHeader = () => setHeaders([...headers, { name: '', value: '' }]);
+  const updateHeader = (i: number, field: 'name' | 'value', value: string) => {
+    const next = [...headers];
+    next[i] = { ...next[i], [field]: value };
+    setHeaders(next);
+  };
+  const removeHeader = (i: number) =>
+    setHeaders(headers.filter((_, j) => j !== i));
+
+  const originLabel = isEditable
+    ? trans.__('User config')
+    : trans.__('System config');
+
+  return (
+    <div className="jp-mcp-popup-overlay" onClick={onClose}>
+      <div
+        className="jp-mcp-popup"
+        onClick={e => e.stopPropagation()}
+        onKeyDown={e => {
+          e.stopPropagation();
+          if (e.key === 'Enter') {
+            e.preventDefault();
+          }
+        }}
+      >
+        <div className="jp-mcp-popup-header">
+          <span>
+            {server.name} — {trans.__('Advanced Settings')}
+          </span>
+          <Button onClick={onClose} title={trans.__('Close')}>
+            <closeIcon.react />
+          </Button>
+        </div>
+        <div className="jp-mcp-popup-body">
+          {stdioServer && (
+            <>
+              <div className="jp-mcp-popup-section">
+                <h4>{trans.__('Arguments')}</h4>
+                {!args.length && (
+                  <em className="jp-mcp-empty">{trans.__('No arguments.')}</em>
+                )}
+                {args.map((arg, i) => (
+                  <div key={i} className="jp-mcp-arg-row">
+                    <input
+                      value={arg}
+                      disabled={!isEditable}
+                      onChange={e => updateArg(i, e.target.value)}
+                    />
+                    {isEditable && (
+                      <Button
+                        onClick={() => removeArg(i)}
+                        title={trans.__('Remove')}
+                      >
+                        <closeIcon.react />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {isEditable && (
+                  <button
+                    type="button"
+                    className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
+                    onClick={addArg}
+                  >
+                    {trans.__('Add')}
+                  </button>
+                )}
+              </div>
+              <div className="jp-mcp-popup-section">
+                <h4>{trans.__('Environment Variables')}</h4>
+                {!env.length && (
+                  <em className="jp-mcp-empty">
+                    {trans.__('No environment variables.')}
+                  </em>
+                )}
+                {env.map((envVar, i) => (
+                  <div key={i} className="jp-mcp-kv-row">
+                    <input
+                      value={envVar.name}
+                      placeholder={trans.__('Name')}
+                      disabled={!isEditable}
+                      onChange={e => updateEnv(i, 'name', e.target.value)}
+                    />
+                    <input
+                      value={envVar.value}
+                      placeholder={trans.__('Value')}
+                      disabled={!isEditable}
+                      onChange={e => updateEnv(i, 'value', e.target.value)}
+                    />
+                    {isEditable && (
+                      <Button
+                        onClick={() => removeEnv(i)}
+                        title={trans.__('Remove')}
+                      >
+                        <closeIcon.react />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {isEditable && (
+                  <button
+                    type="button"
+                    className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
+                    onClick={addEnv}
+                  >
+                    {trans.__('Add')}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+          {httpServer && (
+            <div className="jp-mcp-popup-section">
+              <h4>{trans.__('HTTP Headers')}</h4>
+              {!headers.length && (
+                <em className="jp-mcp-empty">{trans.__('No HTTP headers.')}</em>
+              )}
+              {headers.map((header, i) => (
+                <div key={i} className="jp-mcp-kv-row">
+                  <input
+                    value={header.name}
+                    placeholder={trans.__('Name')}
+                    disabled={!isEditable}
+                    onChange={e => updateHeader(i, 'name', e.target.value)}
+                  />
+                  <input
+                    value={header.value}
+                    placeholder={trans.__('Value')}
+                    disabled={!isEditable}
+                    onChange={e => updateHeader(i, 'value', e.target.value)}
+                  />
+                  {isEditable && (
+                    <Button
+                      onClick={() => removeHeader(i)}
+                      title={trans.__('Remove')}
+                    >
+                      <closeIcon.react />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              {isEditable && (
+                <button
+                  type="button"
+                  className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
+                  onClick={addHeader}
+                >
+                  {trans.__('Add')}
+                </button>
+              )}
+            </div>
+          )}
+          <div className="jp-mcp-popup-section">
+            <h4>{trans.__('Config file')}</h4>
+            <div className="jp-mcp-origin">{originLabel}</div>
+            {server.config_file && (
+              <div className="jp-mcp-config-file">{server.config_file}</div>
+            )}
+          </div>
+        </div>
+        <div className="jp-mcp-popup-footer">
+          <button
+            type="button"
+            className="jp-mod-styled jp-mod-reject"
+            onClick={onClose}
+          >
+            {trans.__('Cancel')}
+          </button>
+          {isEditable && (
+            <button
+              type="button"
+              className="jp-mod-styled jp-mod-accept"
+              onClick={handleSave}
+            >
+              {trans.__('Save')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const Row: React.FC<IRowProps> = ({
@@ -53,9 +307,10 @@ const Row: React.FC<IRowProps> = ({
   onSave,
   onCancel,
   onDelete,
+  onOpenAdvanced,
   trans
 }) => {
-  const [draft, setDraft] = useState<IMcpServer>({ ...server });
+  const [draft, setDraft] = useState<IMcpServerEntry>({ ...server });
 
   useEffect(() => {
     if (isEditing) {
@@ -69,16 +324,24 @@ const Row: React.FC<IRowProps> = ({
         name: draft.name,
         type: 'stdio',
         command: '',
-        editable: draft.editable
+        editable: draft.editable,
+        config_file: draft.config_file
       });
     } else {
       setDraft({
         name: draft.name,
         type: 'http',
         url: '',
-        editable: draft.editable
+        editable: draft.editable,
+        config_file: draft.config_file
       });
     }
+  };
+
+  const handleSave = () => {
+    if (isNew && !draft.name) return;
+    const { editable: _e, config_file: _c, ...serverData } = draft;
+    onSave(serverData as IMcpServer);
   };
 
   if (!isEditing) {
@@ -86,7 +349,7 @@ const Row: React.FC<IRowProps> = ({
       <tr>
         <td>{server.name}</td>
         <td>{server.type || 'stdio'}</td>
-        <td>{'command' in server ? server.command : server.url}</td>
+        <td>{server.type === 'stdio' ? server.command : server.url}</td>
         <td>
           {server.editable && (
             <>
@@ -101,11 +364,12 @@ const Row: React.FC<IRowProps> = ({
               </Button>
             </>
           )}
-        </td>
-        <td>
-          {server.editable
-            ? trans.__('User config')
-            : trans.__('System config')}
+          <Button
+            onClick={onOpenAdvanced}
+            title={trans.__('Advanced settings')}
+          >
+            <settingsIcon.react />
+          </Button>
         </td>
       </tr>
     );
@@ -134,37 +398,36 @@ const Row: React.FC<IRowProps> = ({
         </select>
       </td>
       <td>
-        {'command' in draft ? (
+        {draft.type === 'stdio' ? (
           <input
-            value={(draft as IMcpServerStdio).command}
+            value={draft.command}
             onChange={e =>
               setDraft({
-                ...(draft as IMcpServerStdio),
+                ...draft,
                 command: e.target.value
               })
             }
           />
         ) : (
           <input
-            value={(draft as IMcpServerHttp).url}
+            value={draft.url}
             onChange={e =>
-              setDraft({ ...(draft as IMcpServerHttp), url: e.target.value })
+              setDraft({
+                ...(draft as IMcpServerHttp & IMcpServerEntry),
+                url: e.target.value
+              })
             }
           />
         )}
       </td>
       <td>
-        <Button
-          onClick={() => (!isNew || draft.name) && onSave(draft)}
-          title={trans.__('Save')}
-        >
+        <Button onClick={handleSave} title={trans.__('Save')}>
           <checkIcon.react />
         </Button>
         <Button onClick={onCancel} title={trans.__('Cancel')}>
           <closeIcon.react />
         </Button>
       </td>
-      <td>{trans.__('User config')}</td>
     </tr>
   );
 };
@@ -177,6 +440,9 @@ const ServerTable: React.FC<IServerTableProps> = ({
 }) => {
   const [editingName, setEditingName] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [advancedServer, setAdvancedServer] = useState<IMcpServerEntry | null>(
+    null
+  );
 
   const startEdit = (name: string) => {
     setEditingName(name);
@@ -198,6 +464,11 @@ const ServerTable: React.FC<IServerTableProps> = ({
     stopEditing();
   };
 
+  const handleAdvancedSave = (server: IMcpServer) => {
+    onSave(server);
+    setAdvancedServer(null);
+  };
+
   return (
     <>
       <table className="jp-mcp-table">
@@ -207,13 +478,12 @@ const ServerTable: React.FC<IServerTableProps> = ({
             <th>{trans.__('Type')}</th>
             <th>{trans.__('Command/URL')}</th>
             <th>{trans.__('Actions')}</th>
-            <th>{trans.__('Origin')}</th>
           </tr>
         </thead>
         <tbody>
           {servers.length === 0 && !isAdding && (
             <tr>
-              <td colSpan={5} className="jp-mcp-empty">
+              <td colSpan={4} className="jp-mcp-empty">
                 {trans.__('No servers configured.')}
               </td>
             </tr>
@@ -227,6 +497,7 @@ const ServerTable: React.FC<IServerTableProps> = ({
               onSave={handleSave}
               onCancel={stopEditing}
               onDelete={onDelete}
+              onOpenAdvanced={() => setAdvancedServer(server)}
               trans={trans}
             />
           ))}
@@ -240,17 +511,27 @@ const ServerTable: React.FC<IServerTableProps> = ({
               onSave={handleSave}
               onCancel={stopEditing}
               onDelete={onDelete}
+              onOpenAdvanced={() => {}}
               trans={trans}
             />
           )}
         </tbody>
       </table>
       <button
+        type="button"
         className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
         onClick={startAdd}
       >
         {trans.__('Add')}
       </button>
+      {advancedServer && (
+        <AdvancedSettingsPopup
+          server={advancedServer}
+          onClose={() => setAdvancedServer(null)}
+          onSave={handleAdvancedSave}
+          trans={trans}
+        />
+      )}
     </>
   );
 };
@@ -261,7 +542,7 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
   translator
 }) => {
   const trans = translator.load('jupyter-mcp-manager');
-  const [servers, setServers] = useState<IMcpServer[]>([]);
+  const [servers, setServers] = useState<IMcpServerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

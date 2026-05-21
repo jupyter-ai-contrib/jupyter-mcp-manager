@@ -20,6 +20,7 @@ class HttpHeader(BaseModel):
 
 class McpServerStdio(BaseModel):
     """Configuration for a stdio-based MCP server."""
+    type: str = "stdio"
     args: List[str] = Field(
         default_factory=list,
         description="Command-line arguments to pass to the MCP server."

@@ -39,3 +39,108 @@
   border: none;
   box-shadow: none;
 }
+
+.jp-mcp-popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.jp-mcp-popup {
+  background: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color1);
+  border-radius: 4px;
+  padding: 24px;
+  min-width: 420px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jp-mcp-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--jp-border-color1);
+  font-weight: bold;
+}
+
+.jp-mcp-popup-header .jp-Button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.jp-mcp-popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.jp-mcp-popup-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.jp-mcp-popup-section h4 {
+  margin: 0 0 4px;
+  font-size: var(--jp-ui-font-size1);
+  font-weight: bold;
+}
+
+.jp-mcp-popup-section .jp-mcp-empty {
+  text-align: left;
+}
+
+.jp-mcp-arg-row,
+.jp-mcp-kv-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.jp-mcp-arg-row input,
+.jp-mcp-kv-row input {
+  flex: 1;
+  width: auto;
+}
+
+.jp-mcp-arg-row .jp-Button,
+.jp-mcp-kv-row .jp-Button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+
+.jp-mcp-popup-section > .jp-ArrayOperationsButton {
+  width: fit-content;
+}
+
+.jp-mcp-popup-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--jp-border-color1);
+}
+
+.jp-mcp-origin {
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-mcp-config-file {
+  font-family: var(--jp-code-font-family);
+  font-size: var(--jp-code-font-size);
+  color: var(--jp-ui-font-color2);
+  word-break: break-all;
+}

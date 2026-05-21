@@ -219,6 +219,18 @@ class McpServerManager:
                 self.log.error(f"Failed to save user MCP config to {config_path}: {e}")
             return False
 
+    def get_server_source_map(self) -> dict:
+        """Return a mapping of server name to the config file it was last loaded from."""
+        source_map = {}
+        for config_file in self._get_config_file_paths():
+            config = self._load_config_from_file(config_file)
+            if config:
+                for server in config.get("mcp_servers", []):
+                    name = server.get("name")
+                    if name:
+                        source_map[name] = config_file
+        return source_map
+
     def get_user_servers(self) -> List[dict]:
         """Get user-level MCP server configurations as raw dicts."""
         config_path = self.get_user_config_path()
