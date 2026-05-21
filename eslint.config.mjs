@@ -49,7 +49,7 @@ export default defineConfig([
           }
         }
       ],
-      '@typescript-eslint/no-unused-vars': ['warn', { args: 'none' }],
+      '@typescript-eslint/no-unused-vars': ['warn', { args: 'none', "ignoreRestSiblings": true }],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-namespace': 'off',
       '@typescript-eslint/no-use-before-define': 'off',
