@@ -351,24 +351,22 @@ const Row: React.FC<IRowProps> = ({
         <td>{server.type || 'stdio'}</td>
         <td>{server.type === 'stdio' ? server.command : server.url}</td>
         <td>
-          {server.editable && (
-            <>
-              <Button onClick={onStartEdit} title={trans.__('Edit')}>
-                <editIcon.react />
-              </Button>
-              <Button
-                onClick={() => onDelete(server.name)}
-                title={trans.__('Delete')}
-              >
-                <deleteIcon.react />
-              </Button>
-            </>
-          )}
           <Button
-            onClick={onOpenAdvanced}
-            title={trans.__('Advanced settings')}
+            onClick={onStartEdit}
+            title={trans.__('Edit')}
+            style={{ visibility: server.editable ? 'visible' : 'hidden' }}
           >
+            <editIcon.react />
+          </Button>
+          <Button onClick={onOpenAdvanced} title={trans.__('Advanced settings')}>
             <settingsIcon.react />
+          </Button>
+          <Button
+            onClick={() => onDelete(server.name)}
+            title={trans.__('Delete')}
+            style={{ visibility: server.editable ? 'visible' : 'hidden' }}
+          >
+            <deleteIcon.react />
           </Button>
         </td>
       </tr>
