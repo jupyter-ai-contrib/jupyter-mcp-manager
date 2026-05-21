@@ -358,7 +358,10 @@ const Row: React.FC<IRowProps> = ({
           >
             <editIcon.react />
           </Button>
-          <Button onClick={onOpenAdvanced} title={trans.__('Advanced settings')}>
+          <Button
+            onClick={onOpenAdvanced}
+            title={trans.__('Advanced settings')}
+          >
             <settingsIcon.react />
           </Button>
           <Button
