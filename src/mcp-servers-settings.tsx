@@ -31,7 +31,7 @@ interface IMcpServerPanelProps {
 interface IServerTableProps {
   servers: IMcpServerEntry[];
   onDelete: (name: string) => void;
-  onSave: (server: IMcpServer) => void;
+  onSave: (server: IMcpServerEntry) => void;
   trans: IRenderMime.TranslationBundle;
 }
 
@@ -40,7 +40,7 @@ interface IRowProps {
   isEditing: boolean;
   isNew?: boolean;
   onStartEdit: () => void;
-  onSave: (server: IMcpServer) => void;
+  onSave: (server: IMcpServerEntry) => void;
   onCancel: () => void;
   onDelete: (name: string) => void;
   onOpenAdvanced: () => void;
@@ -50,7 +50,7 @@ interface IRowProps {
 interface IAdvancedSettingsPopupProps {
   server: IMcpServerEntry;
   onClose: () => void;
-  onSave: (server: IMcpServer) => void;
+  onSave: (server: IMcpServerEntry) => void;
   trans: IRenderMime.TranslationBundle;
 }
 
@@ -94,23 +94,9 @@ const AdvancedSettingsPopup: React.FC<IAdvancedSettingsPopupProps> = ({
 
   const handleSave = () => {
     if (stdioServer) {
-      const {
-        editable: _e,
-        config_file: _c,
-        deletable: _d,
-        source: _s,
-        ...base
-      } = stdioServer;
-      onSave({ ...base, args, env });
+      onSave({ ...stdioServer, args, env });
     } else if (httpServer) {
-      const {
-        editable: _e,
-        config_file: _c,
-        deletable: _d,
-        source: _s,
-        ...base
-      } = httpServer;
-      onSave({ ...base, headers });
+      onSave({ ...httpServer, headers });
     }
   };
 
@@ -361,14 +347,7 @@ const Row: React.FC<IRowProps> = ({
 
   const handleSave = () => {
     if (isNew && !draft.name) return;
-    const {
-      editable: _e,
-      config_file: _c,
-      deletable: _d,
-      source: _s,
-      ...serverData
-    } = draft;
-    onSave(serverData as IMcpServer);
+    onSave(draft);
   };
 
   if (!isEditing) {
@@ -487,12 +466,12 @@ const ServerTable: React.FC<IServerTableProps> = ({
     setIsAdding(false);
   };
 
-  const handleSave = (server: IMcpServer) => {
+  const handleSave = (server: IMcpServerEntry) => {
     onSave(server);
     stopEditing();
   };
 
-  const handleAdvancedSave = (server: IMcpServer) => {
+  const handleAdvancedSave = (server: IMcpServerEntry) => {
     onSave(server);
     setAdvancedServer(null);
   };
@@ -643,10 +622,16 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     }
   };
 
-  const handleSave = async (server: IMcpServer) => {
+  const handleSave = async (entry: IMcpServerEntry) => {
     try {
-      const existing = servers.find(s => s.name === server.name);
-      if (existing?.source === 'backend' && existing.editable) {
+      const {
+        editable: _e,
+        deletable: _d,
+        source,
+        config_file: _c,
+        ...server
+      } = entry;
+      if (source === 'backend') {
         await requestAPI<any>('servers', serverSettings, {
           method: 'PUT',
           body: JSON.stringify(server),
