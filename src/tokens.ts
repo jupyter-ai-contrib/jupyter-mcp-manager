@@ -34,11 +34,13 @@ export interface IMcpServerHttp {
 export type IMcpServer = IMcpServerStdio | IMcpServerHttp;
 
 /**
- * Server entry as returned by the API, including response-only metadata.
- * editable and config_file are not part of the saved schema.
+ * Server entry as returned by the API or settings registry, including UI metadata.
+ * editable, deletable, source, and config_file are not part of the saved schema.
  */
 export type IMcpServerEntry = IMcpServer & {
   editable: boolean;
+  deletable: boolean;
+  source: 'settings' | 'backend';
   config_file: string;
 };
 
