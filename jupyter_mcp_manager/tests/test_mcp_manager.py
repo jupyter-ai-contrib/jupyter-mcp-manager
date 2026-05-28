@@ -3,6 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from jupyter_mcp_manager.mcp_manager import (
     McpServerManager,
@@ -258,6 +259,69 @@ class TestMcpServerManager:
 
             # Should return empty settings, not crash
             assert settings.mcp_servers == []
+
+
+class TestLabSettings:
+    """Tests for JupyterLab settings file loading.
+
+    The autouse fixture in conftest.py redirects jupyter_data_dir to tmp_path,
+    so tests create files there and the manager picks them up automatically.
+    """
+
+    def _make_lab_settings_file(self, data_dir: Path, servers: list) -> Path:
+        plugin_dir = data_dir / "lab" / "user-settings" / "jupyter-mcp-manager"
+        plugin_dir.mkdir(parents=True)
+        plugin_file = plugin_dir / "plugin.jupyterlab-settings"
+        plugin_file.write_text(json.dumps({"mcpSettings": {"mcp_servers": servers}}))
+        return plugin_file
+
+    def test_lab_settings_path_exists(self, isolate_lab_data_dir):
+        """_get_lab_settings_path returns the path when the file exists."""
+        self._make_lab_settings_file(isolate_lab_data_dir, [])
+        manager = McpServerManager(builtin_servers=[])
+        result = manager._get_lab_settings_path()
+        assert result is not None
+        assert result.endswith("plugin.jupyterlab-settings")
+
+    def test_lab_settings_path_missing(self):
+        """_get_lab_settings_path returns None when the file does not exist."""
+        manager = McpServerManager(builtin_servers=[])
+        assert manager._get_lab_settings_path() is None
+
+    def test_load_lab_settings(self, isolate_lab_data_dir):
+        """_load_lab_settings parses mcpSettings.mcp_servers correctly."""
+        servers = [{"name": "lab-server", "type": "http", "url": "http://lab.example.com"}]
+        self._make_lab_settings_file(isolate_lab_data_dir, servers)
+        manager = McpServerManager(builtin_servers=[])
+        assert manager._load_lab_settings() == {"mcp_servers": servers}
+
+    def test_load_lab_settings_empty(self, isolate_lab_data_dir):
+        """_load_lab_settings returns None when mcp_servers list is empty."""
+        self._make_lab_settings_file(isolate_lab_data_dir, [])
+        manager = McpServerManager(builtin_servers=[])
+        assert manager._load_lab_settings() is None
+
+    def test_lab_settings_merged_with_priority(self, tmp_path, isolate_lab_data_dir):
+        """Lab settings override same-named servers from traditional config files."""
+        config_file = tmp_path / "mcp_servers.json"
+        config_file.write_text(json.dumps({
+            "mcp_servers": [
+                {"name": "server-a", "type": "http", "url": "http://old.example.com"},
+                {"name": "server-b", "type": "http", "url": "http://b.example.com"},
+            ]
+        }))
+        self._make_lab_settings_file(isolate_lab_data_dir, [
+            {"name": "server-a", "type": "http", "url": "http://new.example.com"},
+            {"name": "server-c", "type": "http", "url": "http://c.example.com"},
+        ])
+        manager = McpServerManager(
+            builtin_servers=[],
+            extra_config_paths=[str(config_file)],
+        )
+        settings = manager.get_settings()
+        assert len(settings.mcp_servers) == 3
+        server_a = next(s for s in settings.mcp_servers if s.name == "server-a")
+        assert server_a.url == "http://new.example.com"
 
 
 class TestMcpSettings:

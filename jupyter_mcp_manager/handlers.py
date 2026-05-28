@@ -6,33 +6,28 @@ import json
 from jupyter_server.base.handlers import APIHandler
 import tornado
 
+from .mcp_manager import McpServerManager
+
 
 class McpServersHandler(APIHandler):
     """Handler for getting all configured MCP servers."""
 
     @tornado.web.authenticated
     def get(self):
-        """Get all configured MCP servers."""
-        manager = self.settings["mcp_manager"]
+        """Get config-file MCP servers (lab-settings servers are managed by the frontend)."""
+        manager: McpServerManager = self.settings["mcp_manager"]
         if self.get_query_argument("reload", default=None):
             manager.clear_cache()
-        settings = manager.get_settings()
 
-        # Get user-level servers to mark them as editable
-        user_servers = manager.get_user_servers()
-        user_server_names = {s.get("name") for s in user_servers}
-        source_map = manager.get_server_source_map()
+        user_server_names = {s.get("name") for s in manager.get_user_servers()}
         user_config_path = manager.get_user_config_path()
 
-        # Convert to JSON-serializable format with editable and config_file flags
         servers = []
-        for server in settings.mcp_servers:
+        for server in manager.get_config_file_servers():
             server_dict = server.model_dump()
             is_editable = server.name in user_server_names
             server_dict["editable"] = is_editable
-            server_dict["config_file"] = source_map.get(
-                server.name, user_config_path if is_editable else ""
-            )
+            server_dict["config_file"] = user_config_path if is_editable else ""
             servers.append(server_dict)
 
         self.finish(json.dumps({
@@ -43,7 +38,7 @@ class McpServersHandler(APIHandler):
     @tornado.web.authenticated
     def post(self):
         """Save user-level MCP server configurations."""
-        manager = self.settings["mcp_manager"]
+        manager: McpServerManager = self.settings["mcp_manager"]
 
         try:
             body = json.loads(self.request.body.decode('utf-8'))
@@ -67,7 +62,7 @@ class McpServersHandler(APIHandler):
     @tornado.web.authenticated
     def put(self):
         """Update or add a specific MCP server in user configuration."""
-        manager = self.settings["mcp_manager"]
+        manager: McpServerManager = self.settings["mcp_manager"]
 
         try:
             body = json.loads(self.request.body.decode('utf-8'))
@@ -105,7 +100,7 @@ class McpServersHandler(APIHandler):
     @tornado.web.authenticated
     def delete(self):
         """Delete a specific MCP server from user configuration."""
-        manager = self.settings["mcp_manager"]
+        manager: McpServerManager = self.settings["mcp_manager"]
 
         server_name = self.get_query_argument("name", default=None)
         if not server_name:
@@ -134,7 +129,7 @@ class McpServerHandler(APIHandler):
     @tornado.web.authenticated
     def get(self, server_name: str):
         """Get a specific MCP server configuration by name."""
-        manager = self.settings["mcp_manager"]
+        manager: McpServerManager = self.settings["mcp_manager"]
         server = manager.get_server_by_name(server_name)
 
         if server is None:
