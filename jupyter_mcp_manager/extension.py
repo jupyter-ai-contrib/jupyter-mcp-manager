@@ -63,7 +63,7 @@ class McpManagerExtension(ExtensionApp):
         # self.serverapp is guaranteed to be available at this point
         lab_server_app = None
         if LabServerApp is not None and hasattr(self.serverapp, 'extension_manager') and hasattr(self.serverapp.extension_manager, 'extension_apps'):
-            lab_apps = self.serverapp.extension_manager.extension_apps.get("jupyterlab")
+            lab_apps = self.serverapp.extension_manager.extension_apps.get("jupyterlab") or []
             lab_server_app = next((app for app in lab_apps if isinstance(app, LabServerApp)), None)
             if lab_server_app is None:
                 self.log.info("LabServerApp not available, MCP servers won't be loaded from jupyterlab settings")
