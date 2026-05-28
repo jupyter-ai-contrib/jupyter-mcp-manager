@@ -120,9 +120,7 @@ test.describe('MCP Servers Settings panel', () => {
       await expect(row).toContainText(HTTP_SERVER.url);
     });
 
-    test('should show edit button for editable servers', async ({
-      page
-    }) => {
+    test('should show edit button for editable servers', async ({ page }) => {
       await openMcpSettings(page);
       const row = page.locator('tr', { hasText: STDIO_SERVER.name });
       await expect(row.getByTitle('Edit')).toBeVisible();
