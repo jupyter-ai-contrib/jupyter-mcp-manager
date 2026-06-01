@@ -3,7 +3,6 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
 
 from jupyter_mcp_manager.mcp_manager import (
     McpServerManager,

@@ -20,8 +20,8 @@ export class McpManager implements IMcpManager {
     // Listen to settings changes
     settingRegistry.load(PLUGIN_IDS.manager).then(settings => {
       this._settings = settings;
-      settings.changed.connect(this._loadServers, this);
-      this._loadServers();
+      settings.changed.connect(() => this._loadServers(), this);
+      this._loadServers(true);
     });
   }
 
@@ -35,7 +35,7 @@ export class McpManager implements IMcpManager {
   /**
    * Reload the servers from settings and config.
    */
-  private async _loadServers(): Promise<void> {
+  private async _loadServers(init: boolean = false): Promise<void> {
     const settingsServers: IMcpServerEntry[] = [];
     const backendServers: IMcpServerEntry[] = [];
 
@@ -83,14 +83,17 @@ export class McpManager implements IMcpManager {
     const previousServers = this._servers.sort((a, b) =>
       a.name < b.name ? -1 : 1
     );
-    if (
-      !ArrayExt.shallowEqual(newServers, previousServers, (a, b) =>
+    const serversChanged = !ArrayExt.shallowEqual(
+      newServers,
+      previousServers,
+      (a, b) =>
         JSONExt.deepEqual(
           a as unknown as ReadonlyJSONObject,
           b as unknown as ReadonlyJSONObject
         )
-      )
-    ) {
+    );
+
+    if (serversChanged || init) {
       this._servers = newServers;
       this._serversChanged.emit();
     }
