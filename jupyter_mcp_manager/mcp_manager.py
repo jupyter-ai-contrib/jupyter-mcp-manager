@@ -294,7 +294,6 @@ class McpServerManager:
                 self.log.error(f"Failed to save user MCP config to {config_path}: {e}")
             return False
 
-
     def get_user_servers(self) -> List[dict]:
         """Get user-level MCP server configurations as raw dicts."""
         config_path = self.get_user_config_path()

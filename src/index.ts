@@ -6,40 +6,53 @@ import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { IFormRendererRegistry } from '@jupyterlab/ui-components';
 
+import { McpManager } from './mcp-manager';
 import { McpServersSettings } from './mcp-servers-settings';
+import { IMcpManager, IMcpManagerToken, PLUGIN_IDS } from './tokens';
 
 /**
- * Initialization data for the jupyter-mcp-manager extension.
+ * Main extension plugin.
+ * This plugin provides:
+ * - A settings panel for managing MCP servers (via ISettingRegistry)
+ * - An IMcpManager service (via token) that is the source of truth for MCP server configs
  */
-const plugin: JupyterFrontEndPlugin<void> = {
-  id: 'jupyter-mcp-manager:plugin',
+const plugin: JupyterFrontEndPlugin<IMcpManager> = {
+  id: PLUGIN_IDS.manager,
   description: 'A JupyterLab extension to manage MCP servers.',
   autoStart: true,
+  provides: IMcpManagerToken,
   optional: [IFormRendererRegistry, ISettingRegistry, ITranslator],
   activate: (
     app: JupyterFrontEnd,
     formRenderer: IFormRendererRegistry | null,
     settingRegistry: ISettingRegistry | null,
     translator: ITranslator | null
-  ) => {
+  ): IMcpManager => {
     console.log('JupyterLab extension jupyter-mcp-manager is activated!');
 
+    const trans = translator ?? nullTranslator;
+    const serverSettings = app.serviceManager.serverSettings;
+
+    // Create the MCP manager (source of truth)
     if (!settingRegistry) {
-      return;
+      throw new Error('ISettingRegistry is required for jupyter-mcp-manager');
     }
 
-    settingRegistry.load(plugin.id).then(async settings => {
-      formRenderer?.addRenderer(`${plugin.id}.mcpSettings`, {
-        fieldRenderer: (props: any) =>
-          McpServersSettings({
-            serverSettings: app.serviceManager.serverSettings,
-            settings,
-            translator: translator ?? nullTranslator,
-            ...props
-          })
-      });
+    const manager = new McpManager(serverSettings, settingRegistry);
+
+    // Register settings panel
+    formRenderer?.addRenderer(`${plugin.id}.mcpSettings`, {
+      fieldRenderer: (props: any) =>
+        McpServersSettings({
+          manager,
+          translator: trans,
+          ...props
+        })
     });
+
+    return manager;
   }
 };
 
 export default plugin;
+export { IMcpManager, IMcpManagerToken, McpManager };

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ServerConnection } from '@jupyterlab/services';
-import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
 import {
   Button,
@@ -12,18 +11,17 @@ import {
   settingsIcon
 } from '@jupyterlab/ui-components';
 
-import { requestAPI } from './request';
 import {
   IEnvVariable,
   IHttpHeader,
-  IMcpServer,
+  IMcpManager,
   IMcpServerEntry,
   IMcpServerHttp,
   IMcpServerStdio
 } from './tokens';
 
 interface IMcpServerPanelProps {
-  settings: ISettingRegistry.ISettings;
+  manager: IMcpManager;
   serverSettings: ServerConnection.ISettings;
   translator: ITranslator;
 }
@@ -544,78 +542,33 @@ const ServerTable: React.FC<IServerTableProps> = ({
 };
 
 export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
-  settings,
-  serverSettings,
+  manager,
   translator
 }) => {
   const trans = translator.load('jupyter-mcp-manager');
-  const [servers, setServers] = useState<IMcpServerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [servers, setServers] = useState<IMcpServerEntry[]>(
+    manager.getServers()
+  );
 
   useEffect(() => {
-    loadServers();
-    settings.changed.connect(loadServers);
-    return () => {
-      settings.changed.disconnect(loadServers);
-    };
-  }, []);
-
-  const loadServers = async () => {
-    try {
-      setLoading(true);
-
-      const mcpSettings = settings.get('mcpSettings').composite as {
-        mcp_servers?: IMcpServer[];
-      } | null;
-      const settingsServers: IMcpServerEntry[] = (
-        mcpSettings?.mcp_servers ?? []
-      ).map(s => ({
-        ...s,
-        editable: true,
-        deletable: true,
-        source: 'settings' as const,
-        config_file: ''
-      }));
-
-      let backendServers: IMcpServerEntry[] = [];
-      try {
-        const data = await requestAPI<any>('servers', serverSettings);
-        const settingsNames = new Set(settingsServers.map(s => s.name));
-        backendServers = (data.mcp_servers as IMcpServerEntry[])
-          .filter(s => !settingsNames.has(s.name))
-          .map(s => ({ ...s, deletable: false, source: 'backend' as const }));
-      } catch {
-        // Backend unavailable (e.g. JupyterLite) — use settings only.
-      }
-
-      setServers([...settingsServers, ...backendServers]);
-      setError(null);
-    } catch (err) {
-      setError(trans.__('Failed to load MCP servers'));
-      console.error(err);
-    } finally {
+    const handleServersChanged = () => {
+      setServers(manager.getServers());
       setLoading(false);
-    }
-  };
+    };
+
+    // Listen to manager changes
+    manager.serversChanged.connect(handleServersChanged);
+    handleServersChanged();
+    return () => {
+      manager.serversChanged.disconnect(handleServersChanged);
+    };
+  }, [manager]);
 
   const handleDelete = async (serverName: string) => {
     try {
-      const existing = servers.find(s => s.name === serverName);
-      if (!existing || existing.source !== 'settings') {
-        return;
-      }
-      const current = settings.get('mcpSettings').composite as {
-        mcp_servers?: IMcpServer[];
-      } | null;
-      const updated = (current?.mcp_servers ?? []).filter(
-        s => s.name !== serverName
-      );
-      await settings.set(
-        'mcpSettings',
-        JSON.parse(JSON.stringify({ mcp_servers: updated }))
-      );
-      await loadServers();
+      await manager.deleteServer(serverName);
     } catch (err) {
       setError(trans.__('Failed to delete server'));
       console.error(err);
@@ -624,35 +577,7 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
 
   const handleSave = async (entry: IMcpServerEntry) => {
     try {
-      const {
-        editable: _e,
-        deletable: _d,
-        source,
-        config_file: _c,
-        ...server
-      } = entry;
-      if (source === 'backend') {
-        await requestAPI<any>('servers', serverSettings, {
-          method: 'PUT',
-          body: JSON.stringify(server),
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } else {
-        const current = settings.get('mcpSettings').composite as {
-          mcp_servers?: IMcpServer[];
-        } | null;
-        const list = current?.mcp_servers ?? [];
-        const idx = list.findIndex(s => s.name === server.name);
-        const updated =
-          idx >= 0
-            ? list.map((s, i) => (i === idx ? server : s))
-            : [...list, server];
-        await settings.set(
-          'mcpSettings',
-          JSON.parse(JSON.stringify({ mcp_servers: updated }))
-        );
-      }
-      await loadServers();
+      await manager.saveServer(entry);
     } catch (err) {
       setError(trans.__('Failed to save server'));
       console.error(err);

@@ -1,4 +1,13 @@
-import type { RJSFSchema } from '@rjsf/utils';
+import { Token } from '@lumino/coreutils';
+import { ISignal } from '@lumino/signaling';
+
+/**
+ * The plugin ids.
+ */
+export const PLUGIN_IDS = {
+  manager: 'jupyter-mcp-manager:manager'
+};
+
 /**
  * Token and interfaces for MCP server management.
  */
@@ -45,8 +54,44 @@ export type IMcpServerEntry = IMcpServer & {
 };
 
 /**
- * Interface for MCP server settings
+ * Interface for the MCP manager service.
+ * This is the source of truth for MCP server configurations.
  */
-export interface IMcpSettings extends RJSFSchema {
-  mcp_servers: IMcpServer[];
+export interface IMcpManager {
+  /**
+   * Get all available MCP servers (from both settings and backend config).
+   */
+  getServers(): IMcpServerEntry[];
+
+  /**
+   * Get a specific MCP server by name.
+   */
+  getServer(name: string): IMcpServerEntry | null;
+
+  /**
+   * Save MCP server configuration to user settings.
+   */
+  saveServer(server: IMcpServerEntry): Promise<void>;
+
+  /**
+   * Delete an MCP server from user settings.
+   */
+  deleteServer(name: string): Promise<void>;
+
+  /**
+   * Refresh the list of MCP servers.
+   */
+  refresh(): Promise<void>;
+
+  /**
+   * Event emitted when the list of MCP servers changes.
+   */
+  serversChanged: ISignal<IMcpManager, void>;
 }
+
+/**
+ * Token for the MCP manager service.
+ */
+export const IMcpManagerToken = new Token<IMcpManager>(
+  'jupyter-mcp-manager:IMcpManager'
+);

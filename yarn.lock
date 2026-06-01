@@ -7802,6 +7802,9 @@ __metadata:
     "@jupyterlab/testutils": ^4.0.0
     "@jupyterlab/translation": ^4.5.7
     "@jupyterlab/ui-components": ^4.0.0
+    "@lumino/algorithm": ^2.0.4
+    "@lumino/coreutils": ^2.2.2
+    "@lumino/signaling": ^2.1.5
     "@types/jest": ^29.2.0
     "@types/json-schema": ^7.0.11
     "@types/react": ^18.0.26
