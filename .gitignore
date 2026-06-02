@@ -8,12 +8,16 @@ node_modules/
 .ipynb_checkpoints
 *.tsbuildinfo
 jupyter_mcp_manager/labextension
+
 # Version file is handled by hatchling
 jupyter_mcp_manager/_version.py
 
 # Integration tests
 ui-tests/test-results/
 ui-tests/playwright-report/
+
+# jest report
+junit.xml
 
 # Created by https://www.gitignore.io/api/python
 # Edit at https://www.gitignore.io/?templates=python

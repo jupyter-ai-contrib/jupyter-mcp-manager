@@ -548,9 +548,7 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
   const trans = translator.load('jupyter-mcp-manager');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [servers, setServers] = useState<IMcpServerEntry[]>(
-    manager.getServers()
-  );
+  const [servers, setServers] = useState<IMcpServerEntry[]>([]);
 
   useEffect(() => {
     const handleServersChanged = () => {
@@ -560,7 +558,15 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
 
     // Listen to manager changes
     manager.serversChanged.connect(handleServersChanged);
-    handleServersChanged();
+
+    // Refresh the manager to ensure we have the latest servers from backend
+    // This is needed because servers might have been added via the backend API
+    // after the manager was initialized.
+    manager.refresh().then(() => {
+      // Set the servers even if no signal has been emitted, to initialize the list.
+      handleServersChanged();
+    });
+
     return () => {
       manager.serversChanged.disconnect(handleServersChanged);
     };
