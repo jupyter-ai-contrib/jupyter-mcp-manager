@@ -44,12 +44,9 @@ class McpServerHttp(BaseModel):
     url: str = Field(description="URL to the MCP server.")
 
 
-class McpSettings(BaseModel):
-    """
-    Configuration for MCP servers.
 
-    This can be loaded from a JSON file or constructed programmatically.
-    """
+class McpSettings(BaseModel):
+    """Configuration for MCP servers."""
     mcp_servers: List[Union[McpServerStdio, McpServerHttp]] = Field(
         default_factory=list,
         description="List of MCP server configurations."

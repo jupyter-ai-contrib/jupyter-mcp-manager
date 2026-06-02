@@ -55,9 +55,8 @@ class McpServerManager:
         # Use Jupyter's config directories
         self.config_dirs = jupyter_config_path()
 
-        # Cache for loaded settings
         self._config_file_cache: Optional[McpSettings] = None
-        self._settings_cache: Optional[McpSettings] = None
+        self._all_servers_cache: Optional[McpSettings] = None
 
         # Observers notified when lab settings change
         self._observers: List[Callable[[], None]] = []
@@ -208,36 +207,21 @@ class McpServerManager:
             return []
 
     def get_settings(self) -> McpSettings:
-        """
-        Get the MCP settings by loading and merging all configuration sources.
-
-        Returns:
-            McpSettings: The merged MCP server configuration
-        """
-        if self._settings_cache is not None:
-            return self._settings_cache
-
-        merged_config = self._load_all_configs()
-
-        # Validate and parse the configuration
+        """Get MCP settings merged from all sources."""
+        if self._all_servers_cache is not None:
+            return self._all_servers_cache
         try:
-            settings = McpSettings(**merged_config)
-            self._settings_cache = settings
-
+            self._all_servers_cache = McpSettings(**self._load_all_configs())
             if self.log:
-                self.log.info(
-                    f"Loaded MCP settings with {len(settings.mcp_servers)} servers"
-                )
-
-            return settings
+                self.log.info(f"Loaded {len(self._all_servers_cache.mcp_servers)} MCP servers")
+            return self._all_servers_cache
         except Exception as e:
             if self.log:
                 self.log.error(f"Failed to parse MCP configuration: {e}")
-            # Return empty settings on error
             return McpSettings(mcp_servers=[])
 
     def get_servers(self) -> List[Union[McpServerStdio, McpServerHttp]]:
-        """Get the list of configured MCP servers."""
+        """Get all configured MCP servers merged from all sources."""
         return self.get_settings().mcp_servers
 
     def get_server_by_name(self, name: str) -> Optional[Union[McpServerStdio, McpServerHttp]]:
@@ -250,7 +234,7 @@ class McpServerManager:
     def clear_cache(self) -> None:
         """Clear all caches so next access will reload from disk."""
         self._config_file_cache = None
-        self._settings_cache = None
+        self._all_servers_cache = None
         if self.log:
             self.log.info("MCP server manager cache cleared")
 
@@ -267,7 +251,7 @@ class McpServerManager:
             pass
 
     def notify_observers(self) -> None:
-        """Invalidate the settings cache and call all registered observers."""
+        """Call all registered observers."""
         for callback in list(self._observers):
             try:
                 callback()
