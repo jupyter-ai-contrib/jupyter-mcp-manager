@@ -92,6 +92,6 @@ export interface IMcpManager {
 /**
  * Token for the MCP manager service.
  */
-export const IMcpManagerToken = new Token<IMcpManager>(
+export const IMcpManager = new Token<IMcpManager>(
   'jupyter-mcp-manager:IMcpManager'
 );

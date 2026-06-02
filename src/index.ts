@@ -8,7 +8,7 @@ import { IFormRendererRegistry } from '@jupyterlab/ui-components';
 
 import { McpManager } from './mcp-manager';
 import { McpServersSettings } from './mcp-servers-settings';
-import { IMcpManager, IMcpManagerToken, PLUGIN_IDS } from './tokens';
+import { IMcpManager, PLUGIN_IDS } from './tokens';
 
 /**
  * Main extension plugin.
@@ -20,7 +20,7 @@ const plugin: JupyterFrontEndPlugin<IMcpManager> = {
   id: PLUGIN_IDS.manager,
   description: 'A JupyterLab extension to manage MCP servers.',
   autoStart: true,
-  provides: IMcpManagerToken,
+  provides: IMcpManager,
   optional: [IFormRendererRegistry, ISettingRegistry, ITranslator],
   activate: (
     app: JupyterFrontEnd,
@@ -55,4 +55,4 @@ const plugin: JupyterFrontEndPlugin<IMcpManager> = {
 };
 
 export default plugin;
-export { IMcpManager, IMcpManagerToken, McpManager };
+export { IMcpManager, IMcpManager as IMcpManagerToken, McpManager };
