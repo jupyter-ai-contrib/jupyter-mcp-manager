@@ -3,7 +3,7 @@
 
 import json
 import os
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 from jupyter_core.paths import jupyter_config_path, jupyter_config_dir
 from jupyterlab_server.settings_utils import get_settings
@@ -58,6 +58,9 @@ class McpServerManager:
         # Cache for loaded settings
         self._config_file_cache: Optional[McpSettings] = None
         self._settings_cache: Optional[McpSettings] = None
+
+        # Observers notified when lab settings change
+        self._observers: List[Callable[[], None]] = []
 
     def _get_config_file_paths(self) -> List[str]:
         """Get all possible config file paths to check."""
@@ -250,6 +253,27 @@ class McpServerManager:
         self._settings_cache = None
         if self.log:
             self.log.info("MCP server manager cache cleared")
+
+    def add_observer(self, callback: Callable[[], None]) -> None:
+        """Register a callback to be called when lab settings change."""
+        if callback not in self._observers:
+            self._observers.append(callback)
+
+    def remove_observer(self, callback: Callable[[], None]) -> None:
+        """Unregister a previously registered callback."""
+        try:
+            self._observers.remove(callback)
+        except ValueError:
+            pass
+
+    def notify_observers(self) -> None:
+        """Invalidate the settings cache and call all registered observers."""
+        for callback in list(self._observers):
+            try:
+                callback()
+            except Exception as e:
+                if self.log:
+                    self.log.error(f"MCP observer error: {e}")
 
     def add_config_dir(self, directory: str) -> None:
         """Add a directory to search for configuration files."""

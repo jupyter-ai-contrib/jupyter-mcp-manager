@@ -12,6 +12,7 @@ except ImportError:
 
 from .mcp_manager import get_mcp_manager
 from .handlers import (
+    McpNotifyHandler,
     McpServerHandler,
     McpServersHandler,
 )
@@ -86,10 +87,12 @@ class McpManagerExtension(ExtensionApp):
         server_route = url_path_join(
             base_url, "jupyter-mcp-manager", "servers", "(?P<server_name>.+)"
         )
+        notify_route = url_path_join(base_url, "jupyter-mcp-manager", "notify")
 
         handlers = [
             (servers_route, McpServersHandler),
             (server_route, McpServerHandler),
+            (notify_route, McpNotifyHandler),
         ]
 
         self.serverapp.web_app.add_handlers(host_pattern, handlers)

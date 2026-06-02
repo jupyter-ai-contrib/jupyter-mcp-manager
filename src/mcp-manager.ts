@@ -20,8 +20,8 @@ export class McpManager implements IMcpManager {
     // Listen to settings changes
     settingRegistry.load(PLUGIN_IDS.manager).then(settings => {
       this._settings = settings;
-      settings.changed.connect(() => this._loadServers(), this);
-      this._loadServers(true);
+      settings.changed.connect(() => this._loadServers(true), this);
+      this._loadServers(false, true);
     });
   }
 
@@ -33,11 +33,24 @@ export class McpManager implements IMcpManager {
   }
 
   /**
+   * Called when JupyterLab settings change: notify the backend then reload.
+   */
+  private async _notifyBackend(): Promise<void> {
+    try {
+      await requestAPI<void>('notify', this._serverSettings, {
+        method: 'POST'
+      });
+    } catch {
+      // Backend unavailable
+    }
+  }
+
+  /**
    * Reload the servers from settings and config.
    */
   private async _loadServers(
-    init: boolean = false,
-    reloadBackend: boolean = false
+    reloadBackend: boolean = false,
+    init: boolean = false
   ): Promise<void> {
     const settingsServers: IMcpServerEntry[] = [];
     const backendServers: IMcpServerEntry[] = [];
@@ -99,6 +112,11 @@ export class McpManager implements IMcpManager {
     if (serversChanged || init) {
       this._servers = newServers;
       this._serversChanged.emit();
+    }
+
+    // notify the backend only if some changes occurred.
+    if (serversChanged) {
+      this._notifyBackend();
     }
   }
 
@@ -192,7 +210,7 @@ export class McpManager implements IMcpManager {
    * Refresh the list of MCP servers.
    */
   async refresh(): Promise<void> {
-    await this._loadServers(false, true);
+    await this._loadServers(true);
   }
 
   private _serverSettings: any;
