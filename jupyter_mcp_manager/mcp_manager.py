@@ -56,6 +56,7 @@ class McpServerManager:
         self.config_dirs = jupyter_config_path()
 
         # Cache for loaded settings
+        self._config_file_cache: Optional[McpSettings] = None
         self._settings_cache: Optional[McpSettings] = None
 
     def _get_config_file_paths(self) -> List[str]:
@@ -134,7 +135,7 @@ class McpServerManager:
                         app_settings_dir=app_settings_dir,
                         schemas_dir=schemas_dir,
                         settings_dir=user_settings_dir,
-                        schema_name="jupyter-mcp-manager:plugin",
+                        schema_name="jupyter-mcp-manager:manager",
                         labextensions_path=labextensions_path,
                         overrides=None,
                     )
@@ -182,7 +183,8 @@ class McpServerManager:
 
     def _load_all_configs(self) -> dict:
         """Load and merge all configuration sources including lab settings."""
-        configs = [self._load_config_file_servers()]
+        config_file_servers = [s.model_dump() for s in self.get_config_file_servers()]
+        configs = [{"mcp_servers": config_file_servers}]
         lab_settings = self._load_lab_settings()
         if lab_settings:
             configs.append(lab_settings)
@@ -194,8 +196,11 @@ class McpServerManager:
         Used by the REST API so that lab-settings servers are managed solely
         by the frontend via the JupyterLab settings registry.
         """
+        if self._config_file_cache is not None:
+            return self._config_file_cache.mcp_servers
         try:
-            return McpSettings(**self._load_config_file_servers()).mcp_servers
+            self._config_file_cache = McpSettings(**self._load_config_file_servers())
+            return self._config_file_cache.mcp_servers
         except Exception:
             return []
 
@@ -240,7 +245,8 @@ class McpServerManager:
         return None
 
     def clear_cache(self) -> None:
-        """Clear the settings cache so next access will reload from disk."""
+        """Clear all caches so next access will reload from disk."""
+        self._config_file_cache = None
         self._settings_cache = None
         if self.log:
             self.log.info("MCP server manager cache cleared")

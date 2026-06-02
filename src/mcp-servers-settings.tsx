@@ -8,6 +8,7 @@ import {
   closeIcon,
   deleteIcon,
   editIcon,
+  refreshIcon,
   settingsIcon
 } from '@jupyterlab/ui-components';
 
@@ -30,6 +31,7 @@ interface IServerTableProps {
   servers: IMcpServerEntry[];
   onDelete: (name: string) => void;
   onSave: (server: IMcpServerEntry) => void;
+  onRefresh: () => void;
   trans: IRenderMime.TranslationBundle;
 }
 
@@ -441,6 +443,7 @@ const ServerTable: React.FC<IServerTableProps> = ({
   servers,
   onDelete,
   onSave,
+  onRefresh,
   trans
 }) => {
   const [editingName, setEditingName] = useState<string | null>(null);
@@ -482,7 +485,15 @@ const ServerTable: React.FC<IServerTableProps> = ({
             <th>{trans.__('Name')}</th>
             <th>{trans.__('Type')}</th>
             <th>{trans.__('Command/URL')}</th>
-            <th>{trans.__('Actions')}</th>
+            <th>
+              {trans.__('Actions')}
+              <Button
+                onClick={onRefresh}
+                title={trans.__('Refresh server list')}
+              >
+                <refreshIcon.react />
+              </Button>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -590,6 +601,15 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     }
   };
 
+  const handleRefresh = async () => {
+    try {
+      await manager.refresh();
+    } catch (err) {
+      setError(trans.__('Failed to refresh servers'));
+      console.error(err);
+    }
+  };
+
   if (loading) {
     return <div>{trans.__('Loading MCP servers...')}</div>;
   }
@@ -603,6 +623,7 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
       servers={servers}
       onDelete={handleDelete}
       onSave={handleSave}
+      onRefresh={handleRefresh}
       trans={trans}
     />
   );
