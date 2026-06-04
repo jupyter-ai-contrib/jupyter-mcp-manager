@@ -1,7 +1,7 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
-from typing import List, Union
+from typing import List, Literal, Union
 
 from pydantic import BaseModel, Field
 
@@ -20,7 +20,7 @@ class HttpHeader(BaseModel):
 
 class McpServerStdio(BaseModel):
     """Configuration for a stdio-based MCP server."""
-    type: str = "stdio"
+    type: Literal["stdio"]
     args: List[str] = Field(
         default_factory=list,
         description="Command-line arguments to pass to the MCP server."
@@ -35,7 +35,7 @@ class McpServerStdio(BaseModel):
 
 class McpServerHttp(BaseModel):
     """Configuration for an HTTP-based MCP server."""
-    type: str = "http"
+    type: Literal["http"]
     headers: List[HttpHeader] = Field(
         default_factory=list,
         description="HTTP headers to set when making requests to the MCP server."
