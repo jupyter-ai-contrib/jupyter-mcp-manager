@@ -62,7 +62,7 @@
         "@jupyterlab/rendermime": "^4.0.0",
         "@jupyterlab/services": "^7.0.0",
         "@jupyterlab/settingregistry": "^4.0.0",
-        "@jupyterlab/translation": "^4.5.7",
+        "@jupyterlab/translation": "^4.0.0",
         "@jupyterlab/ui-components": "^4.0.0",
         "@lumino/algorithm": "^2.0.4",
         "@lumino/coreutils": "^2.2.2",
