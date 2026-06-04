@@ -127,10 +127,10 @@ class McpNotifyHandler(APIHandler):
     """Handler for notifying the manager that lab settings have changed."""
 
     @tornado.web.authenticated
-    def post(self):
+    async def post(self):
         """Notify the manager that JupyterLab settings changed and trigger observers."""
         manager: McpServerManager = self.settings["mcp_manager"]
-        manager.notify_observers()
+        await manager.notify_observers()
         self.finish(json.dumps({"status": "ok"}))
 
 

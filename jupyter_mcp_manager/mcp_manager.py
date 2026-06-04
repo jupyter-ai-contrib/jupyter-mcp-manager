@@ -1,9 +1,10 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
+import asyncio
 import json
 import os
-from typing import Callable, List, Optional, Union
+from typing import Awaitable, Callable, List, Optional, Union
 
 from jupyter_core.paths import jupyter_config_path, jupyter_config_dir
 from jupyterlab_server.settings_utils import get_settings
@@ -59,7 +60,7 @@ class McpServerManager:
         self._all_servers_cache: Optional[McpSettings] = None
 
         # Observers notified when lab settings change
-        self._observers: List[Callable[[], None]] = []
+        self._observers: List[Callable[[], Union[None, Awaitable[None]]]] = []
 
     def _get_config_file_paths(self) -> List[str]:
         """Get all possible config file paths to check."""
@@ -238,23 +239,25 @@ class McpServerManager:
         if self.log:
             self.log.info("MCP server manager cache cleared")
 
-    def add_observer(self, callback: Callable[[], None]) -> None:
+    def add_observer(self, callback: Callable[[], Union[None, Awaitable[None]]]) -> None:
         """Register a callback to be called when lab settings change."""
         if callback not in self._observers:
             self._observers.append(callback)
 
-    def remove_observer(self, callback: Callable[[], None]) -> None:
+    def remove_observer(self, callback: Callable[[], Union[None, Awaitable[None]]]) -> None:
         """Unregister a previously registered callback."""
         try:
             self._observers.remove(callback)
         except ValueError:
             pass
 
-    def notify_observers(self) -> None:
-        """Call all registered observers."""
+    async def notify_observers(self) -> None:
+        """Call all registered observers, awaiting async ones."""
         for callback in list(self._observers):
             try:
-                callback()
+                result = callback()
+                if asyncio.iscoroutine(result):
+                    await result
             except Exception as e:
                 if self.log:
                     self.log.error(f"MCP observer error: {e}")
