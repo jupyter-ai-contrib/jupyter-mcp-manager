@@ -2,15 +2,30 @@
 
 [![Github Actions Status](https://github.com/brichet/jupyter-mcp-manager/workflows/Build/badge.svg)](https://github.com/brichet/jupyter-mcp-manager/actions/workflows/build.yml)
 
-A JupyterLab extension to manage MCP servers.
+**A JupyterLab extension for managing Model Context Protocol (MCP) servers.**
 
-This extension is composed of a Python package named `jupyter_mcp_manager`
-for the server extension and a NPM package named `jupyter-mcp-manager`
-for the frontend extension.
+This extension provides a user interface and backend infrastructure to configure and manage MCP servers directly within JupyterLab. It allows you to define which MCP servers are available for use by other JupyterLab extensions or AI assistants.
+
+## What is MCP?
+
+The **Model Context Protocol (MCP)** is an open standard that enables AI assistants and other clients to interact with various data sources, tools, and services through a unified interface. MCP servers expose resources, tools, and prompts that AI models can query and use during conversations.
+
+This extension manages the MCP server configurations that other JupyterLab extensions (like `jupyter_server_mcp`) or external clients can use to connect to and interact with MCP servers.
+
+## Features
+
+- **Configuration Management**: Add, edit, and remove MCP server configurations through a dedicated settings panel in JupyterLab
+- **Multiple Server Types**: Support for both **stdio** (local executable) and **HTTP** (remote endpoint) MCP servers
+- **Flexible Configuration**: Configure servers via:
+  - JupyterLab Settings UI (persisted in browser)
+  - JSON configuration files in Jupyter config directories (`~/.jupyter/mcp_servers.json`)
+- **Environment Variables & Headers**: Set custom environment variables for stdio servers and HTTP headers for HTTP servers
+- **Real-time Updates**: Automatic synchronization between frontend settings and backend configuration
 
 ## Requirements
 
 - JupyterLab >= 4.0.0
+- Python >= 3.10
 
 ## Install
 
@@ -19,6 +34,66 @@ To install the extension, execute:
 ```bash
 pip install jupyter_mcp_manager
 ```
+
+After installation, restart JupyterLab for the extension to be activated.
+
+## Usage
+
+### Accessing MCP Server Settings
+
+1. Open JupyterLab
+2. Go to **Settings** > **Advanced Settings Editor**
+3. Select **MCP Manager** from the left sidebar
+4. Configure your MCP servers using the UI or switch to the **JSON** tab for raw JSON editing
+
+### Configuration File
+
+You can also configure MCP servers by creating a `mcp_servers.json` file in your Jupyter config directory (typically `~/.jupyter/`):
+
+```json
+{
+  "mcp_servers": [
+    {
+      "name": "my-stdio-server",
+      "type": "stdio",
+      "command": "/path/to/mcp-server-executable",
+      "args": ["--option1", "value1"],
+      "env": [
+        {"name": "ENV_VAR", "value": "value"}
+      ]
+    },
+    {
+      "name": "my-http-server",
+      "type": "http",
+      "url": "http://localhost:8080",
+      "headers": [
+        {"name": "Authorization", "value": "Bearer token"}
+      ]
+    }
+  ]
+}
+```
+
+### Server Configuration Options
+
+#### Stdio Server (Local Executable)
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier for the server |
+| `type` | Yes | Must be `"stdio"` |
+| `command` | Yes | Path to the MCP server executable |
+| `args` | No | Array of command-line arguments |
+| `env` | No | Array of environment variables (each with `name` and `value`) |
+
+#### HTTP Server (Remote Endpoint)
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Unique identifier for the server |
+| `type` | Yes | Must be `"http"` |
+| `url` | Yes | URL of the MCP server endpoint |
+| `headers` | No | Array of HTTP headers (each with `name` and `value`) |
 
 ## Uninstall
 
