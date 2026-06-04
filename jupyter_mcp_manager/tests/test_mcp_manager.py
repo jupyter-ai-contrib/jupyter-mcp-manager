@@ -27,7 +27,7 @@ class TestMcpServerManager:
         """Test manager with built-in servers."""
         builtin = [
             {"name": "builtin-http", "type": "http", "url": "http://localhost:8080"},
-            {"name": "builtin-stdio", "command": "/usr/bin/mcp-server"}
+            {"name": "builtin-stdio", "type": "stdio", "command": "/usr/bin/mcp-server"}
         ]
         manager = McpServerManager(builtin_servers=builtin)
         servers = manager.get_servers()
@@ -199,6 +199,7 @@ class TestMcpServerManager:
             [],
             builtin_servers=[
                 {
+                    "type": "stdio",
                     "name": "stdio-server",
                     "command": "/usr/bin/mcp",
                     "args": ["--verbose"],
@@ -326,8 +327,8 @@ class TestMcpSettings:
 
     def test_settings_with_servers(self):
         settings = McpSettings(mcp_servers=[
-            McpServerHttp(name="http1", url="http://a.com"),
-            McpServerStdio(name="stdio1", command="/usr/bin/mcp")
+            McpServerHttp(type="http", name="http1", url="http://a.com"),
+            McpServerStdio(type="stdio", name="stdio1", command="/usr/bin/mcp")
         ])
         assert len(settings.mcp_servers) == 2
 
