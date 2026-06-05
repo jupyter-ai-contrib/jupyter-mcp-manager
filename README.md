@@ -58,17 +58,13 @@ You can also configure MCP servers by creating a `mcp_servers.json` file in your
       "type": "stdio",
       "command": "/path/to/mcp-server-executable",
       "args": ["--option1", "value1"],
-      "env": [
-        {"name": "ENV_VAR", "value": "value"}
-      ]
+      "env": [{ "name": "ENV_VAR", "value": "value" }]
     },
     {
       "name": "my-http-server",
       "type": "http",
       "url": "http://localhost:8080",
-      "headers": [
-        {"name": "Authorization", "value": "Bearer token"}
-      ]
+      "headers": [{ "name": "Authorization", "value": "Bearer token" }]
     }
   ]
 }
@@ -78,22 +74,22 @@ You can also configure MCP servers by creating a `mcp_servers.json` file in your
 
 #### Stdio Server (Local Executable)
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Unique identifier for the server |
-| `type` | Yes | Must be `"stdio"` |
-| `command` | Yes | Path to the MCP server executable |
-| `args` | No | Array of command-line arguments |
-| `env` | No | Array of environment variables (each with `name` and `value`) |
+| Field     | Required | Description                                                   |
+| --------- | -------- | ------------------------------------------------------------- |
+| `name`    | Yes      | Unique identifier for the server                              |
+| `type`    | Yes      | Must be `"stdio"`                                             |
+| `command` | Yes      | Path to the MCP server executable                             |
+| `args`    | No       | Array of command-line arguments                               |
+| `env`     | No       | Array of environment variables (each with `name` and `value`) |
 
 #### HTTP Server (Remote Endpoint)
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Unique identifier for the server |
-| `type` | Yes | Must be `"http"` |
-| `url` | Yes | URL of the MCP server endpoint |
-| `headers` | No | Array of HTTP headers (each with `name` and `value`) |
+| Field     | Required | Description                                          |
+| --------- | -------- | ---------------------------------------------------- |
+| `name`    | Yes      | Unique identifier for the server                     |
+| `type`    | Yes      | Must be `"http"`                                     |
+| `url`     | Yes      | URL of the MCP server endpoint                       |
+| `headers` | No       | Array of HTTP headers (each with `name` and `value`) |
 
 ## Uninstall
 
