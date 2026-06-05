@@ -52,6 +52,7 @@ class McpServerManager:
         # Use Jupyter's config directories
         self.config_dirs = jupyter_config_path()
 
+        self._extra_servers: List[dict] = []
         self._config_file_cache: Optional[McpSettings] = None
         self._all_servers_cache: Optional[McpSettings] = None
 
@@ -169,9 +170,16 @@ class McpServerManager:
         servers = data.get("mcpSettings", {}).get("mcp_servers", [])
         return {"mcp_servers": servers} if servers else None
 
+    def add_server(self, server: dict) -> None:
+        """Register a server dict directly. Lower priority than config files."""
+        self._extra_servers.append(server)
+        self.clear_cache()
+
     def _load_config_file_servers(self) -> dict:
         """Load and merge config-file servers (no lab settings)."""
         configs = []
+        if self._extra_servers:
+            configs.append({"mcp_servers": self._extra_servers})
         for config_file in self._get_config_file_paths():
             config = self._load_config_from_file(config_file)
             if config:
