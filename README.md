@@ -19,6 +19,7 @@ This extension manages the MCP server configurations that other JupyterLab exten
 - **Flexible Configuration**: Configure servers via:
   - JupyterLab Settings UI (persisted in browser)
   - JSON configuration files in Jupyter config directories (`~/.jupyter/mcp_servers.json`)
+  - adding MCP servers in the manager server side (for extensions)
 - **Environment Variables & Headers**: Set custom environment variables for stdio servers and HTTP headers for HTTP servers
 - **Real-time Updates**: Automatic synchronization between frontend settings and backend configuration
 
