@@ -170,6 +170,33 @@ class TestMcpServerManager:
             assert len(servers) == 1
             assert servers[0].name == "custom"
 
+    def test_add_server(self):
+        """Test adding a server dict directly."""
+        manager = McpServerManager()
+
+        assert len(manager.get_servers()) == 0
+
+        manager.add_server({"name": "dynamic", "type": "http", "url": "http://dynamic.com"})
+        servers = manager.get_servers()
+        assert len(servers) == 1
+        assert servers[0].name == "dynamic"
+
+    def test_add_server_lower_priority_than_config_file(self):
+        """Test that a config file overrides a server added via add_server."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_file = Path(tmpdir) / "mcp_servers.json"
+            config_file.write_text(json.dumps({
+                "mcp_servers": [
+                    {"name": "server1", "type": "http", "url": "http://override.com"}
+                ]
+            }))
+            manager = McpServerManager(extra_config_paths=[str(config_file)])
+            manager.add_server({"name": "server1", "type": "http", "url": "http://default.com"})
+
+            servers = manager.get_servers()
+            assert len(servers) == 1
+            assert servers[0].url == "http://override.com"
+
     def test_stdio_server_parsing(self):
         """Test parsing stdio server configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
