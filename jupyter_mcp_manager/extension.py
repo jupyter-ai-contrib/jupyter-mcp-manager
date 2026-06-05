@@ -3,7 +3,7 @@
 
 from jupyter_server.extension.application import ExtensionApp
 from jupyter_server.utils import url_path_join
-from traitlets import Bool, List, Unicode
+from traitlets import List, Unicode
 
 try:
     from jupyterlab.labapp import LabServerApp
@@ -32,11 +32,6 @@ class McpManagerExtension(ExtensionApp):
     extension_url = "/jupyter-mcp-manager"
 
     # Configuration traits
-    enable_builtin_servers = Bool(
-        True,
-        help="Whether to include built-in MCP servers"
-    ).tag(config=True)
-
     extra_config_paths = List(
         Unicode(),
         help="Additional config file paths to load"
@@ -49,15 +44,6 @@ class McpManagerExtension(ExtensionApp):
     def initialize_handlers(self):
         """Register the API handlers."""
         super().initialize_handlers()
-
-        # Built-in servers (defined in code, not as traits)
-        builtin_servers = []
-        if self.enable_builtin_servers:
-            try:
-                import jupyter_server_mcp  # noqa: F401
-                builtin_servers = [{"name": "jupyter_server_mcp", "type": "http", "url": "http://localhost:8000"}]
-            except ImportError:
-                pass
 
         # Create manager once with extension config and store on server app settings
         # Note: We create the manager here (not in initialize_settings) because
@@ -75,7 +61,6 @@ class McpManagerExtension(ExtensionApp):
             log=self.log,
             lab_server_app=lab_server_app,
             extra_config_paths=self.extra_config_paths,
-            builtin_servers=builtin_servers
         )
         self.serverapp.web_app.settings["mcp_manager"] = manager
 

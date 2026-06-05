@@ -26,7 +26,6 @@ class McpServerManager:
     2. User-specified config paths
 
     Configuration files are merged with the following precedence (later overrides earlier):
-    - Built-in defaults (lowest priority)
     - System jupyter config directories (/etc/jupyter, /usr/local/etc/jupyter, etc.)
     - User jupyter config directory (~/.jupyter)
     - User-specified paths (highest priority)
@@ -35,7 +34,6 @@ class McpServerManager:
     def __init__(
         self,
         log=None,
-        builtin_servers: Optional[List[dict]] = None,
         extra_config_paths: Optional[List[str]] = None,
         lab_server_app=None
     ):
@@ -44,14 +42,12 @@ class McpServerManager:
 
         Args:
             log: Logger instance for logging messages
-            builtin_servers: List of built-in MCP server configurations (as dicts)
             extra_config_paths: Additional paths to config files to load
-            serverapp: The JupyterLab server application, used to get the settings directory
+            lab_server_app: The JupyterLab server application, used to get the settings directory
         """
         self.log = log
-        self.builtin_servers = builtin_servers or []
         self.extra_config_paths = extra_config_paths or []
-        self.labserverapp = lab_server_app
+        self.lab_server_app = lab_server_app
 
         # Use Jupyter's config directories
         self.config_dirs = jupyter_config_path()
@@ -117,8 +113,8 @@ class McpServerManager:
 
     def _get_lab_settings_path(self) -> Optional[str]:
         """Return the JupyterLab user settings file path if it exists, else None."""
-        if self.labserverapp and hasattr(self.labserverapp, 'user_settings_dir'):
-            settings_dir = self.labserverapp.user_settings_dir
+        if self.lab_server_app and hasattr(self.lab_server_app, 'user_settings_dir'):
+            settings_dir = self.lab_server_app.user_settings_dir
         else:
             settings_dir = os.path.join(jupyter_config_dir(), "lab", "user-settings")
         path = os.path.join(settings_dir, "jupyter-mcp-manager", "plugin.jupyterlab-settings")
@@ -126,11 +122,11 @@ class McpServerManager:
 
     def _load_lab_settings(self) -> Optional[dict]:
         """Load MCP servers from JupyterLab settings."""
-        if self.labserverapp:
-            app_settings_dir = getattr(self.labserverapp, 'app_settings_dir', None)
-            schemas_dir = getattr(self.labserverapp, 'schemas_dir', None)
-            user_settings_dir = getattr(self.labserverapp, 'user_settings_dir', None)
-            labextensions_path = getattr(self.labserverapp, 'labextensions_path', None)
+        if self.lab_server_app:
+            app_settings_dir = getattr(self.lab_server_app, 'app_settings_dir', None)
+            schemas_dir = getattr(self.lab_server_app, 'schemas_dir', None)
+            user_settings_dir = getattr(self.lab_server_app, 'user_settings_dir', None)
+            labextensions_path = getattr(self.lab_server_app, 'labextensions_path', None)
 
             if all([app_settings_dir, schemas_dir, user_settings_dir, labextensions_path]):
                 try:
@@ -149,7 +145,7 @@ class McpServerManager:
                         self.log.warning(f"Failed to load JupyterLab settings via get_settings: {e}", exc_info=True)
             elif self.log:
                 missing = [a for a in ('app_settings_dir', 'schemas_dir', 'user_settings_dir', 'labextensions_path')
-                           if not getattr(self.labserverapp, a, None)]
+                           if not getattr(self.lab_server_app, a, None)]
                 self.log.warning(f"serverapp missing required attributes: {missing}")
 
         # Fallback: load directly from the settings file
@@ -174,10 +170,8 @@ class McpServerManager:
         return {"mcp_servers": servers} if servers else None
 
     def _load_config_file_servers(self) -> dict:
-        """Load and merge built-in and config-file servers (no lab settings)."""
+        """Load and merge config-file servers (no lab settings)."""
         configs = []
-        if self.builtin_servers:
-            configs.append({"mcp_servers": self.builtin_servers})
         for config_file in self._get_config_file_paths():
             config = self._load_config_from_file(config_file)
             if config:
@@ -327,27 +321,22 @@ class McpServerManager:
 
 def get_mcp_manager(
     log=None,
-    builtin_servers: Optional[List[dict]] = None,
     extra_config_paths: Optional[List[str]] = None,
     lab_server_app=None
 ) -> McpServerManager:
     """
     Create and return an MCP server manager instance.
 
-    This is the main entry point for getting an MCP server manager.
-
     Args:
         log: Logger instance
-        builtin_servers: Built-in server configurations
         extra_config_paths: Additional config file paths
-        serverapp: The JupyterLab server application
+        lab_server_app: The JupyterLab server application
 
     Returns:
         McpServerManager: Configured MCP server manager
     """
     return McpServerManager(
         log=log,
-        builtin_servers=builtin_servers,
         extra_config_paths=extra_config_paths,
         lab_server_app=lab_server_app
     )
