@@ -144,3 +144,18 @@
   color: var(--jp-ui-font-color2);
   word-break: break-all;
 }
+
+.jp-mcp-table td:last-child {
+  display: flex;
+  align-items: center;
+}
+
+.jp-mcp-table tr.jp-mcp-disabled td {
+  opacity: 0.45;
+}
+
+.jp-mcp-enabled-checkbox {
+  margin-right: 4px;
+  vertical-align: middle;
+  cursor: pointer;
+}

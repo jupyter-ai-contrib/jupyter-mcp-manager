@@ -130,6 +130,7 @@ class McpNotifyHandler(APIHandler):
     async def post(self):
         """Notify the manager that JupyterLab settings changed and trigger observers."""
         manager: McpServerManager = self.settings["mcp_manager"]
+        manager.clear_cache()
         await manager.notify_observers()
         self.finish(json.dumps({"status": "ok"}))
 

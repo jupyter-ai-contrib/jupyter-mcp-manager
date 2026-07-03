@@ -5,7 +5,12 @@ import { JSONExt, ReadonlyJSONObject } from '@lumino/coreutils';
 import { ISignal, Signal } from '@lumino/signaling';
 
 import { requestAPI } from './request';
-import { IMcpManager, IMcpServer, IMcpServerEntry } from './tokens';
+import {
+  IMcpManager,
+  IMcpServer,
+  IMcpServerEntry,
+  IMcpServerSettings
+} from './tokens';
 
 /**
  * Implementation of the MCP manager.
@@ -92,30 +97,37 @@ export class McpManager implements IMcpManager {
    */
   private _rebuildMergedList(init: boolean = false): void {
     const settingsServers: IMcpServerEntry[] = [];
+    const overlayMap = new Map<string, boolean>();
 
     if (this._settings) {
       const mcpSettings = this._settings.get('mcpSettings').composite as {
-        mcp_servers?: IMcpServer[];
+        mcp_servers?: IMcpServerSettings[];
       } | null;
-      for (const server of mcpSettings?.mcp_servers ?? []) {
-        settingsServers.push({
-          ...server,
-          editable: true,
-          deletable: true,
-          source: 'settings',
-          config_file: ''
-        });
+      for (const item of mcpSettings?.mcp_servers ?? []) {
+        if ('type' in item) {
+          settingsServers.push({
+            ...item,
+            editable: true,
+            deletable: true,
+            source: 'settings',
+            config_file: ''
+          });
+        } else {
+          overlayMap.set(item.name, item.disabled);
+        }
       }
     }
 
     const settingsNames = new Set(settingsServers.map(s => s.name));
-    const backendServers = this._backendServers.filter(
-      s => !settingsNames.has(s.name)
-    );
+    const backendServers = this._backendServers
+      .filter(s => !settingsNames.has(s.name))
+      .map(s =>
+        overlayMap.has(s.name) ? { ...s, disabled: overlayMap.get(s.name) } : s
+      );
 
-    const newServers = [...settingsServers, ...backendServers].sort((a, b) =>
-      a.name < b.name ? -1 : 1
-    );
+    const newServers = [...settingsServers, ...backendServers]
+      .filter(s => !s.disabled)
+      .sort((a, b) => (a.name < b.name ? -1 : 1));
     const previousServers = [...this._servers].sort((a, b) =>
       a.name < b.name ? -1 : 1
     );

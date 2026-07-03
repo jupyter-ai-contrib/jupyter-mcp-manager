@@ -31,6 +31,7 @@ class McpServerStdio(BaseModel):
         description="Environment variables to set when launching the MCP server."
     )
     name: str = Field(description="Human-readable name identifying this MCP server.")
+    disabled: bool = Field(default=False, description="Whether this server is disabled.")
 
 
 class McpServerHttp(BaseModel):
@@ -42,6 +43,7 @@ class McpServerHttp(BaseModel):
     )
     name: str = Field(description="Human-readable name identifying this MCP server.")
     url: str = Field(description="URL to the MCP server.")
+    disabled: bool = Field(default=False, description="Whether this server is disabled.")
 
 
 

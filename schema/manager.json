@@ -54,6 +54,12 @@
                       }
                     },
                     "default": []
+                  },
+                  "disabled": {
+                    "title": "Disabled",
+                    "description": "Whether this server is disabled.",
+                    "type": "boolean",
+                    "default": false
                   }
                 },
                 "additionalProperties": false
@@ -92,6 +98,29 @@
                       }
                     },
                     "default": []
+                  },
+                  "disabled": {
+                    "title": "Disabled",
+                    "description": "Whether this server is disabled.",
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              {
+                "title": "Disabled Overlay",
+                "description": "Thin overlay to disable a backend server without copying its full config.",
+                "type": "object",
+                "required": ["name", "disabled"],
+                "properties": {
+                  "name": {
+                    "title": "Server Name",
+                    "type": "string"
+                  },
+                  "disabled": {
+                    "title": "Disabled",
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false

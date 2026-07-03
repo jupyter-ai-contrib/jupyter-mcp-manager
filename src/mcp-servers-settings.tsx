@@ -16,9 +16,9 @@ import {
   IEnvVariable,
   IHttpHeader,
   IMcpManager,
-  IMcpServer,
   IMcpServerEntry,
   IMcpServerHttp,
+  IMcpServerSettings,
   IMcpServerStdio
 } from './tokens';
 
@@ -33,6 +33,7 @@ interface IServerTableProps {
   onDelete: (name: string) => void;
   onSave: (server: IMcpServerEntry) => void;
   onRefresh: () => void;
+  onToggleDisabled: (server: IMcpServerEntry) => void;
   trans: IRenderMime.TranslationBundle;
 }
 
@@ -45,6 +46,7 @@ interface IRowProps {
   onCancel: () => void;
   onDelete: (name: string) => void;
   onOpenAdvanced: () => void;
+  onToggleDisabled: (server: IMcpServerEntry) => void;
   trans: IRenderMime.TranslationBundle;
 }
 
@@ -312,6 +314,7 @@ const Row: React.FC<IRowProps> = ({
   onCancel,
   onDelete,
   onOpenAdvanced,
+  onToggleDisabled,
   trans
 }) => {
   const [draft, setDraft] = useState<IMcpServerEntry>({ ...server });
@@ -353,11 +356,18 @@ const Row: React.FC<IRowProps> = ({
 
   if (!isEditing) {
     return (
-      <tr>
+      <tr className={server.disabled ? 'jp-mcp-disabled' : ''}>
         <td>{server.name}</td>
         <td>{server.type || 'stdio'}</td>
         <td>{server.type === 'stdio' ? server.command : server.url}</td>
         <td>
+          <input
+            type="checkbox"
+            checked={!server.disabled}
+            onChange={() => onToggleDisabled(server)}
+            title={server.disabled ? trans.__('Enable') : trans.__('Disable')}
+            className="jp-mcp-enabled-checkbox"
+          />
           <Button
             onClick={onStartEdit}
             title={trans.__('Edit')}
@@ -440,6 +450,7 @@ const ServerTable: React.FC<IServerTableProps> = ({
   onDelete,
   onSave,
   onRefresh,
+  onToggleDisabled,
   trans
 }) => {
   const [editingName, setEditingName] = useState<string | null>(null);
@@ -510,6 +521,7 @@ const ServerTable: React.FC<IServerTableProps> = ({
               onCancel={stopEditing}
               onDelete={onDelete}
               onOpenAdvanced={() => setAdvancedServer(server)}
+              onToggleDisabled={onToggleDisabled}
               trans={trans}
             />
           ))}
@@ -524,6 +536,7 @@ const ServerTable: React.FC<IServerTableProps> = ({
               onCancel={stopEditing}
               onDelete={onDelete}
               onOpenAdvanced={() => {}}
+              onToggleDisabled={() => {}}
               trans={trans}
             />
           )}
@@ -556,9 +569,12 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
   const trans = translator.load('jupyter-mcp-manager');
   const [error, setError] = useState<string | null>(null);
 
-  // Settings servers — initialized synchronously, updated via settings.changed
-  const [settingsMCP, setSettingsMCP] = useState<IMcpServerEntry[]>(() =>
-    Private.parseSettingsMCP(settings)
+  // Settings servers and overlay map — initialized synchronously, updated via settings.changed
+  const [settingsMCP, setSettingsMCP] = useState<IMcpServerEntry[]>(
+    () => Private.parseSettingsMCP(settings).servers
+  );
+  const [overlayMap, setOverlayMap] = useState<Map<string, boolean>>(
+    () => Private.parseSettingsMCP(settings).overlayMap
   );
 
   // Backend servers — provided by the manager, updated via backendServersChanged
@@ -569,7 +585,9 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
   // Subscribe to settings changes
   useEffect(() => {
     const handleSettingsChanged = () => {
-      setSettingsMCP(Private.parseSettingsMCP(settings));
+      const parsed = Private.parseSettingsMCP(settings);
+      setSettingsMCP(parsed.servers);
+      setOverlayMap(parsed.overlayMap);
     };
 
     settings.changed.connect(handleSettingsChanged);
@@ -592,11 +610,15 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     };
   }, [manager]);
 
-  // Merged display list: settings servers take precedence over backend servers
+  // Merged display list: settings servers take precedence; overlays apply disabled state to backend servers
   const settingsNames = new Set(settingsMCP.map(s => s.name));
   const servers: IMcpServerEntry[] = [
     ...settingsMCP,
-    ...backendMCP.filter(s => !settingsNames.has(s.name))
+    ...backendMCP
+      .filter(s => !settingsNames.has(s.name))
+      .map(s =>
+        overlayMap.has(s.name) ? { ...s, disabled: overlayMap.get(s.name) } : s
+      )
   ].sort((a, b) => (a.name < b.name ? -1 : 1));
 
   /**
@@ -605,11 +627,20 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
    * otherwise update the settings from the registry.
    */
   const handleSave = async (entry: IMcpServerEntry) => {
-    const { editable, deletable, source, config_file, ...server } = entry;
+    const {
+      editable,
+      deletable,
+      source,
+      config_file,
+      disabled,
+      ...serverCore
+    } = entry as IMcpServerEntry & { disabled?: boolean };
     try {
       if (source === 'backend') {
-        await manager.saveBackendServer(server);
+        // disabled state lives in the overlay, not the server config
+        await manager.saveBackendServer(serverCore);
       } else {
+        const server = disabled ? { ...serverCore, disabled } : serverCore;
         const list = Private.getSettingsList(settings);
         const idx = list.findIndex(s => s.name === entry.name);
         const updated =
@@ -640,6 +671,42 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
   };
 
   /**
+   * Toggle the disabled state of a server.
+   * For settings servers: updates the `disabled` flag in-place.
+   * For backend servers: adds or removes a thin overlay entry in settings.
+   */
+  const handleToggleDisabled = async (entry: IMcpServerEntry) => {
+    try {
+      const list = Private.getSettingsList(settings);
+      if (entry.source === 'settings') {
+        await Private.writeSettingsList(
+          settings,
+          list.map(s =>
+            s.name === entry.name && 'type' in s
+              ? { ...s, disabled: !entry.disabled || undefined }
+              : s
+          )
+        );
+      } else {
+        // Remove any existing overlay for this backend server, then re-add if disabling
+        const rest = list.filter(
+          s => !(s.name === entry.name && !('type' in s))
+        );
+        if (!entry.disabled) {
+          await Private.writeSettingsList(settings, [
+            ...rest,
+            { name: entry.name, disabled: true }
+          ]);
+        } else {
+          await Private.writeSettingsList(settings, rest);
+        }
+      }
+    } catch {
+      setError(trans.__('Failed to toggle server'));
+    }
+  };
+
+  /**
    * Refresh the backend MCP server list.
    */
   const handleRefresh = async () => {
@@ -660,6 +727,7 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
       onDelete={handleDelete}
       onSave={handleSave}
       onRefresh={handleRefresh}
+      onToggleDisabled={handleToggleDisabled}
       trans={trans}
     />
   );
@@ -667,41 +735,51 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
 
 namespace Private {
   /**
-   * Helper function to build the MCP server entries.
+   * Parse settings into server entries and a disabled-overlay map.
    */
-  export function parseSettingsMCP(
-    settings: ISettingRegistry.ISettings
-  ): IMcpServerEntry[] {
+  export function parseSettingsMCP(settings: ISettingRegistry.ISettings): {
+    servers: IMcpServerEntry[];
+    overlayMap: Map<string, boolean>;
+  } {
     const mcpSettings = settings.get('mcpSettings').composite as {
-      mcp_servers?: IMcpServer[];
+      mcp_servers?: IMcpServerSettings[];
     } | null;
-    return (mcpSettings?.mcp_servers ?? []).map(server => ({
-      ...server,
-      editable: true,
-      deletable: true,
-      source: 'settings' as const,
-      config_file: ''
-    }));
+    const servers: IMcpServerEntry[] = [];
+    const overlayMap = new Map<string, boolean>();
+    for (const item of mcpSettings?.mcp_servers ?? []) {
+      if ('type' in item) {
+        servers.push({
+          ...item,
+          editable: true,
+          deletable: true,
+          source: 'settings' as const,
+          config_file: ''
+        });
+      } else {
+        overlayMap.set(item.name, item.disabled);
+      }
+    }
+    return { servers, overlayMap };
   }
 
   /**
-   * Get the MCP servers from setting registry.
+   * Get the raw settings list (full entries + thin overlays).
    */
   export const getSettingsList = (
     settings: ISettingRegistry.ISettings
-  ): IMcpServer[] => {
+  ): IMcpServerSettings[] => {
     const current = settings.get('mcpSettings').composite as {
-      mcp_servers?: IMcpServer[];
+      mcp_servers?: IMcpServerSettings[];
     } | null;
     return current?.mcp_servers ?? [];
   };
 
   /**
-   * Write MCP servers in settings registry.
+   * Write the raw settings list back to the registry.
    */
   export const writeSettingsList = async (
     settings: ISettingRegistry.ISettings,
-    list: IMcpServer[]
+    list: IMcpServerSettings[]
   ): Promise<void> => {
     await settings.set(
       'mcpSettings',

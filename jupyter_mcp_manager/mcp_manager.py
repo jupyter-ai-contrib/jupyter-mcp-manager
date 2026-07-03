@@ -190,10 +190,30 @@ class McpServerManager:
         """Load and merge all configuration sources including lab settings."""
         config_file_servers = [s.model_dump() for s in self.get_config_file_servers()]
         configs = [{"mcp_servers": config_file_servers}]
+
+        disabled_names: set = set()
         lab_settings = self._load_lab_settings()
         if lab_settings:
-            configs.append(lab_settings)
-        return self._merge_configs(configs)
+            full_servers = []
+            for s in lab_settings.get("mcp_servers", []):
+                if s.get("disabled") is True:
+                    disabled_names.add(s.get("name"))
+                # Only include full (non-disabled) entries in the merge.
+                if ("command" in s or "url" in s) and not s.get("disabled"):
+                    full_servers.append(s)
+            if full_servers:
+                configs.append({"mcp_servers": full_servers})
+
+        merged = self._merge_configs(configs)
+
+        # Remove servers disabled in user settings.
+        if disabled_names:
+            merged["mcp_servers"] = [
+                s for s in merged["mcp_servers"]
+                if s.get("name") not in disabled_names
+            ]
+
+        return merged
 
     def get_config_file_servers(self) -> List[Union[McpServerStdio, McpServerHttp]]:
         """Get servers from config files only — excludes lab settings.

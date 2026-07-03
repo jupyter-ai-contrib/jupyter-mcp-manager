@@ -24,6 +24,7 @@ export interface IMcpServerStdio {
   command: string;
   args?: string[];
   env?: IEnvVariable[];
+  disabled?: boolean;
 }
 
 export interface IMcpServerHttp {
@@ -31,9 +32,22 @@ export interface IMcpServerHttp {
   name: string;
   url: string;
   headers?: IHttpHeader[];
+  disabled?: boolean;
 }
 
 export type IMcpServer = IMcpServerStdio | IMcpServerHttp;
+
+/**
+ * Thin overlay stored in settings to disable a backend server without copying
+ * its full config. Identified by the absence of `type`.
+ */
+export interface IMcpServerDisabledOverlay {
+  name: string;
+  disabled: boolean;
+}
+
+/** Union of what can appear in the settings `mcp_servers` array. */
+export type IMcpServerSettings = IMcpServer | IMcpServerDisabledOverlay;
 
 /**
  * Server entry including UI metadata (not part of the saved schema).
