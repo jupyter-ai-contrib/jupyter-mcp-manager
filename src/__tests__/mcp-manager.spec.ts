@@ -222,6 +222,132 @@ describe('McpManager', () => {
     expect(manager.getMCPServers().length).toBe(0);
   });
 
+  it('should exclude disabled settings servers from getMCPServers', async () => {
+    const manager = new McpManager({
+      serverSettings: mockServerSettings,
+      settings: makeSettings([
+        { name: 'enabled', type: 'stdio', command: '/usr/bin/enabled' },
+        { name: 'disabled', type: 'stdio', command: '/usr/bin/disabled', disabled: true }
+      ]) as any
+    });
+    await waitForSignal(manager, 'serversChanged');
+
+    const servers = manager.getMCPServers();
+    expect(servers.length).toBe(1);
+    expect(servers[0].name).toBe('enabled');
+  });
+
+  it('should exclude backend servers disabled via thin overlay', async () => {
+    const backendServers: IMcpServerEntry[] = [
+      {
+        name: 'active',
+        type: 'stdio',
+        command: '/usr/bin/active',
+        editable: false,
+        deletable: false,
+        source: 'backend',
+        config_file: '/etc/config.json'
+      },
+      {
+        name: 'suppressed',
+        type: 'stdio',
+        command: '/usr/bin/suppressed',
+        editable: false,
+        deletable: false,
+        source: 'backend',
+        config_file: '/etc/config.json'
+      }
+    ];
+
+    mockRequestAPI.mockResolvedValueOnce({ mcp_servers: backendServers });
+
+    // Thin overlay: disable 'suppressed' without copying its full config
+    const manager = new McpManager({
+      serverSettings: mockServerSettings,
+      settings: makeSettings([
+        { name: 'suppressed', disabled: true } as any
+      ]) as any
+    });
+    await waitForSignal(manager, 'serversChanged');
+
+    const servers = manager.getMCPServers();
+    expect(servers.length).toBe(1);
+    expect(servers[0].name).toBe('active');
+  });
+
+  it('should still expose disabled backend servers via getBackendMCPServers', async () => {
+    const backendServers: IMcpServerEntry[] = [
+      {
+        name: 'suppressed',
+        type: 'stdio',
+        command: '/usr/bin/suppressed',
+        editable: false,
+        deletable: false,
+        source: 'backend',
+        config_file: '/etc/config.json'
+      }
+    ];
+
+    mockRequestAPI.mockResolvedValueOnce({ mcp_servers: backendServers });
+
+    const manager = new McpManager({
+      serverSettings: mockServerSettings,
+      settings: makeSettings([
+        { name: 'suppressed', disabled: true } as any
+      ]) as any
+    });
+    await waitForSignal(manager, 'serversChanged');
+
+    expect(manager.getMCPServers().length).toBe(0);
+    expect(manager.getBackendMCPServers().length).toBe(1);
+    expect(manager.getBackendMCPServers()[0].name).toBe('suppressed');
+  });
+
+  it('should emit serversChanged and update list when a server is disabled', async () => {
+    let mcpServers: IMcpServer[] = [
+      { name: 'alpha', type: 'stdio', command: '/usr/bin/alpha' },
+      { name: 'beta', type: 'stdio', command: '/usr/bin/beta' }
+    ];
+
+    const mockChangedSignal = {
+      connect: jest.fn((cb: any, ctx: any) => {
+        mockChangedSignal._callback = cb.bind(ctx);
+      }),
+      disconnect: jest.fn(),
+      _callback: null as ((...args: any[]) => void) | null
+    };
+
+    const mockSettings = {
+      get: (key: string) =>
+        key === 'mcpSettings'
+          ? { composite: { mcp_servers: mcpServers } }
+          : null,
+      set: jest.fn().mockResolvedValue(undefined),
+      changed: mockChangedSignal
+    };
+
+    const manager = new McpManager({
+      serverSettings: mockServerSettings,
+      settings: mockSettings as any
+    });
+    await waitForSignal(manager, 'serversChanged');
+    expect(manager.getMCPServers().length).toBe(2);
+
+    // Simulate disabling 'beta'
+    mcpServers = [
+      { name: 'alpha', type: 'stdio', command: '/usr/bin/alpha' },
+      { name: 'beta', type: 'stdio', command: '/usr/bin/beta', disabled: true }
+    ];
+
+    const changedPromise = waitForSignal(manager, 'serversChanged');
+    mockChangedSignal._callback?.();
+    await changedPromise;
+
+    const servers = manager.getMCPServers();
+    expect(servers.length).toBe(1);
+    expect(servers[0].name).toBe('alpha');
+  });
+
   it('should work without settings (backend-only mode)', async () => {
     const backendServers: IMcpServerEntry[] = [
       {
