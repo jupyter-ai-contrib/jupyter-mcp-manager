@@ -8,10 +8,6 @@ export const PLUGIN_IDS = {
   manager: 'jupyter-mcp-manager:manager'
 };
 
-/**
- * Token and interfaces for MCP server management.
- */
-
 export interface IEnvVariable {
   name: string;
   value: string;
@@ -37,14 +33,10 @@ export interface IMcpServerHttp {
   headers?: IHttpHeader[];
 }
 
-/**
- * Union type for MCP servers (stdio or http)
- */
 export type IMcpServer = IMcpServerStdio | IMcpServerHttp;
 
 /**
- * Server entry as returned by the API or settings registry, including UI metadata.
- * editable, deletable, source, and config_file are not part of the saved schema.
+ * Server entry including UI metadata (not part of the saved schema).
  */
 export type IMcpServerEntry = IMcpServer & {
   editable: boolean;
@@ -54,44 +46,42 @@ export type IMcpServerEntry = IMcpServer & {
 };
 
 /**
- * Interface for the MCP manager service.
- * This is the source of truth for MCP server configurations.
+ * Read-only aggregator for MCP server configurations.
+ * Mutations are handled by the settings panel directly.
  */
 export interface IMcpManager {
   /**
-   * Get all available MCP servers (from both settings and backend config).
+   * Merged list of all servers (settings + backend).
+   * Intended for external consumers such as MCP clients.
    */
-  getServers(): IMcpServerEntry[];
-
+  getMCPServers(): IMcpServerEntry[];
   /**
-   * Get a specific MCP server by name.
+   * Get an MCP server given its name.
    */
-  getServer(name: string): IMcpServerEntry | null;
-
+  getMCPServer(name: string): IMcpServerEntry | null;
   /**
-   * Save MCP server configuration to user settings.
+   * Raw list of backend config-file servers.
+   * Intended for the settings panel.
    */
-  saveServer(server: IMcpServerEntry): Promise<void>;
-
+  getBackendMCPServers(): IMcpServerEntry[];
   /**
-   * Delete an MCP server from user settings.
+   * Persist a backend server via the REST API and refresh the backend list.
    */
-  deleteServer(name: string): Promise<void>;
-
+  saveBackendServer(server: IMcpServer): Promise<void>;
   /**
-   * Refresh the list of MCP servers.
+   * Refresh the list of backend servers.
    */
   refresh(): Promise<void>;
-
   /**
-   * Event emitted when the list of MCP servers changes.
+   * Emitted when the merged server list changes.
    */
   serversChanged: ISignal<IMcpManager, void>;
+  /**
+   * Emitted when the raw backend server list changes.
+   */
+  backendServersChanged: ISignal<IMcpManager, void>;
 }
 
-/**
- * Token for the MCP manager service.
- */
 export const IMcpManager = new Token<IMcpManager>(
   'jupyter-mcp-manager:IMcpManager'
 );

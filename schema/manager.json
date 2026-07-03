@@ -77,8 +77,7 @@
                   "url": {
                     "title": "URL",
                     "description": "URL to the MCP server endpoint.",
-                    "type": "string",
-                    "format": "uri"
+                    "type": "string"
                   },
                   "headers": {
                     "title": "HTTP Headers",

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { IRenderMime } from '@jupyterlab/rendermime';
-import { ServerConnection } from '@jupyterlab/services';
+import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
 import {
   Button,
@@ -16,6 +16,7 @@ import {
   IEnvVariable,
   IHttpHeader,
   IMcpManager,
+  IMcpServer,
   IMcpServerEntry,
   IMcpServerHttp,
   IMcpServerStdio
@@ -23,7 +24,7 @@ import {
 
 interface IMcpServerPanelProps {
   manager: IMcpManager;
-  serverSettings: ServerConnection.ISettings;
+  settings: ISettingRegistry.ISettings;
   translator: ITranslator;
 }
 
@@ -408,12 +409,7 @@ const Row: React.FC<IRowProps> = ({
         {draft.type === 'stdio' ? (
           <input
             value={draft.command}
-            onChange={e =>
-              setDraft({
-                ...draft,
-                command: e.target.value
-              })
-            }
+            onChange={e => setDraft({ ...draft, command: e.target.value })}
           />
         ) : (
           <input
@@ -554,65 +550,105 @@ const ServerTable: React.FC<IServerTableProps> = ({
 
 export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
   manager,
+  settings,
   translator
 }) => {
   const trans = translator.load('jupyter-mcp-manager');
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [servers, setServers] = useState<IMcpServerEntry[]>([]);
 
+  // Settings servers — initialized synchronously, updated via settings.changed
+  const [settingsMCP, setSettingsMCP] = useState<IMcpServerEntry[]>(() =>
+    Private.parseSettingsMCP(settings)
+  );
+
+  // Backend servers — provided by the manager, updated via backendServersChanged
+  const [backendMCP, setBackendMCP] = useState<IMcpServerEntry[]>(
+    manager.getBackendMCPServers()
+  );
+
+  // Subscribe to settings changes
   useEffect(() => {
-    const handleServersChanged = () => {
-      setServers(manager.getServers());
-      setLoading(false);
+    const handleSettingsChanged = () => {
+      setSettingsMCP(Private.parseSettingsMCP(settings));
     };
 
-    // Listen to manager changes
-    manager.serversChanged.connect(handleServersChanged);
+    settings.changed.connect(handleSettingsChanged);
+    return () => {
+      settings.changed.disconnect(handleSettingsChanged);
+    };
+  }, [settings]);
 
-    // Refresh the manager to ensure we have the latest servers from backend
-    // This is needed because servers might have been added via the backend API
-    // after the manager was initialized.
-    manager.refresh().then(() => {
-      // Set the servers even if no signal has been emitted, to initialize the list.
-      handleServersChanged();
-    });
+  // Subscribe to backend server changes and trigger an initial fetch
+  useEffect(() => {
+    const handleBackendChanged = () => {
+      setBackendMCP(manager.getBackendMCPServers());
+    };
+
+    manager.backendServersChanged.connect(handleBackendChanged);
+    manager.refresh();
 
     return () => {
-      manager.serversChanged.disconnect(handleServersChanged);
+      manager.backendServersChanged.disconnect(handleBackendChanged);
     };
   }, [manager]);
 
-  const handleDelete = async (serverName: string) => {
-    try {
-      await manager.deleteServer(serverName);
-    } catch (err) {
-      setError(trans.__('Failed to delete server'));
-      console.error(err);
-    }
-  };
+  // Merged display list: settings servers take precedence over backend servers
+  const settingsNames = new Set(settingsMCP.map(s => s.name));
+  const servers: IMcpServerEntry[] = [
+    ...settingsMCP,
+    ...backendMCP.filter(s => !settingsNames.has(s.name))
+  ].sort((a, b) => (a.name < b.name ? -1 : 1));
 
+  /**
+   * Save an MCP server (new or updated).
+   * If the settings comes from backend, delegate it to the manager,
+   * otherwise update the settings from the registry.
+   */
   const handleSave = async (entry: IMcpServerEntry) => {
+    const { editable, deletable, source, config_file, ...server } = entry;
     try {
-      await manager.saveServer(entry);
-    } catch (err) {
+      if (source === 'backend') {
+        await manager.saveBackendServer(server);
+      } else {
+        const list = Private.getSettingsList(settings);
+        const idx = list.findIndex(s => s.name === entry.name);
+        const updated =
+          idx >= 0
+            ? list.map((s, i) => (i === idx ? server : s))
+            : [...list, server];
+        await Private.writeSettingsList(settings, updated);
+      }
+    } catch {
       setError(trans.__('Failed to save server'));
-      console.error(err);
     }
   };
 
+  /**
+   * Delete an MCP server, only available for settings coming from the settings registry.
+   */
+  const handleDelete = async (name: string) => {
+    const server = servers.find(s => s.name === name);
+    if (server?.source !== 'settings') return;
+    try {
+      await Private.writeSettingsList(
+        settings,
+        Private.getSettingsList(settings).filter(s => s.name !== name)
+      );
+    } catch {
+      setError(trans.__('Failed to delete server'));
+    }
+  };
+
+  /**
+   * Refresh the backend MCP server list.
+   */
   const handleRefresh = async () => {
     try {
       await manager.refresh();
-    } catch (err) {
+    } catch {
       setError(trans.__('Failed to refresh servers'));
-      console.error(err);
     }
   };
-
-  if (loading) {
-    return <div>{trans.__('Loading MCP servers...')}</div>;
-  }
 
   if (error) {
     return <div className="jp-Alert jp-Alert-error">{error}</div>;
@@ -628,3 +664,48 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     />
   );
 };
+
+namespace Private {
+  /**
+   * Helper function to build the MCP server entries.
+   */
+  export function parseSettingsMCP(
+    settings: ISettingRegistry.ISettings
+  ): IMcpServerEntry[] {
+    const mcpSettings = settings.get('mcpSettings').composite as {
+      mcp_servers?: IMcpServer[];
+    } | null;
+    return (mcpSettings?.mcp_servers ?? []).map(server => ({
+      ...server,
+      editable: true,
+      deletable: true,
+      source: 'settings' as const,
+      config_file: ''
+    }));
+  }
+
+  /**
+   * Get the MCP servers from setting registry.
+   */
+  export const getSettingsList = (
+    settings: ISettingRegistry.ISettings
+  ): IMcpServer[] => {
+    const current = settings.get('mcpSettings').composite as {
+      mcp_servers?: IMcpServer[];
+    } | null;
+    return current?.mcp_servers ?? [];
+  };
+
+  /**
+   * Write MCP servers in settings registry.
+   */
+  export const writeSettingsList = async (
+    settings: ISettingRegistry.ISettings,
+    list: IMcpServer[]
+  ): Promise<void> => {
+    await settings.set(
+      'mcpSettings',
+      JSON.parse(JSON.stringify({ mcp_servers: list }))
+    );
+  };
+}

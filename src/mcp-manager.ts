@@ -1,10 +1,11 @@
+import { ServerConnection } from '@jupyterlab/services';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ArrayExt } from '@lumino/algorithm';
 import { JSONExt, ReadonlyJSONObject } from '@lumino/coreutils';
 import { ISignal, Signal } from '@lumino/signaling';
 
 import { requestAPI } from './request';
-import { IMcpManager, IMcpServer, IMcpServerEntry, PLUGIN_IDS } from './tokens';
+import { IMcpManager, IMcpServer, IMcpServerEntry } from './tokens';
 
 /**
  * Implementation of the MCP manager.
@@ -13,28 +14,33 @@ import { IMcpManager, IMcpServer, IMcpServerEntry, PLUGIN_IDS } from './tokens';
  * and emits signals when the configuration changes.
  */
 export class McpManager implements IMcpManager {
-  constructor(serverSettings: any, settingRegistry: ISettingRegistry) {
-    this._serverSettings = serverSettings;
+  constructor(options: McpManager.IOptions) {
+    this._serverSettings = options.serverSettings;
     this._servers = [];
+    this._backendServers = [];
+    this._settings = options.settings ?? null;
 
-    // Listen to settings changes
-    settingRegistry.load(PLUGIN_IDS.manager).then(settings => {
-      this._settings = settings;
-      settings.changed.connect(() => this._loadServers(true), this);
-      this._loadServers(false, true);
-    });
+    if (this._settings) {
+      this._settings.changed.connect(() => this._rebuildMergedList(), this);
+    }
+
+    this._loadBackendServers(true).then(() => this._rebuildMergedList(true));
   }
 
   /**
-   * A signal emitting when the servers has changed.
+   * Emitted when the merged server list changes.
    */
   get serversChanged(): ISignal<IMcpManager, void> {
     return this._serversChanged;
   }
 
   /**
-   * Called when JupyterLab settings change: notify the backend then reload.
+   * Emitted when the raw backend server list changes.
    */
+  get backendServersChanged(): ISignal<IMcpManager, void> {
+    return this._backendServersChanged;
+  }
+
   private async _notifyBackend(): Promise<void> {
     try {
       await requestAPI<void>('notify', this._serverSettings, {
@@ -46,59 +52,74 @@ export class McpManager implements IMcpManager {
   }
 
   /**
-   * Reload the servers from settings and config.
+   * Fetch backend config-file servers from the REST API and emit
+   * backendServersChanged if the list changed.
    */
-  private async _loadServers(
-    reloadBackend: boolean = false,
-    init: boolean = false
-  ): Promise<void> {
-    const settingsServers: IMcpServerEntry[] = [];
-    const backendServers: IMcpServerEntry[] = [];
+  private async _loadBackendServers(reload: boolean = false): Promise<void> {
+    try {
+      const data = await requestAPI<{ mcp_servers: IMcpServerEntry[] }>(
+        `servers${reload ? '?reload=1' : ''}`,
+        this._serverSettings
+      );
+      const newBackend = data.mcp_servers.map(s => ({
+        ...s,
+        deletable: false,
+        source: 'backend' as const
+      }));
 
-    // Load from JupyterLab settings
+      const changed = !ArrayExt.shallowEqual(
+        newBackend,
+        this._backendServers,
+        (a, b) =>
+          JSONExt.deepEqual(
+            a as unknown as ReadonlyJSONObject,
+            b as unknown as ReadonlyJSONObject
+          )
+      );
+
+      if (changed) {
+        this._backendServers = newBackend;
+        this._backendServersChanged.emit();
+      }
+    } catch {
+      // Backend unavailable
+    }
+  }
+
+  /**
+   * Rebuild the merged server list from current settings + cached backend servers.
+   * Emits serversChanged if the result differs.
+   */
+  private _rebuildMergedList(init: boolean = false): void {
+    const settingsServers: IMcpServerEntry[] = [];
+
     if (this._settings) {
       const mcpSettings = this._settings.get('mcpSettings').composite as {
         mcp_servers?: IMcpServer[];
       } | null;
-      const servers = mcpSettings?.mcp_servers ?? [];
-      for (const server of servers) {
+      for (const server of mcpSettings?.mcp_servers ?? []) {
         settingsServers.push({
           ...server,
           editable: true,
           deletable: true,
-          source: 'settings' as const,
+          source: 'settings',
           config_file: ''
         });
       }
     }
 
-    // Load from backend
-    try {
-      const data = await requestAPI<{ mcp_servers: IMcpServerEntry[] }>(
-        `servers${reloadBackend ? '?reload=1' : ''}`,
-        this._serverSettings
-      );
-      const settingsNames = new Set(settingsServers.map(s => s.name));
-      for (const server of data.mcp_servers) {
-        if (!settingsNames.has(server.name)) {
-          backendServers.push({
-            ...server,
-            deletable: false,
-            source: 'backend' as const
-          });
-        }
-      }
-    } catch {
-      // Backend unavailable, use settings only
-    }
+    const settingsNames = new Set(settingsServers.map(s => s.name));
+    const backendServers = this._backendServers.filter(
+      s => !settingsNames.has(s.name)
+    );
 
-    // Update the list of servers if changed, and emit a signal.
     const newServers = [...settingsServers, ...backendServers].sort((a, b) =>
       a.name < b.name ? -1 : 1
     );
-    const previousServers = this._servers.sort((a, b) =>
+    const previousServers = [...this._servers].sort((a, b) =>
       a.name < b.name ? -1 : 1
     );
+
     const serversChanged = !ArrayExt.shallowEqual(
       newServers,
       previousServers,
@@ -114,107 +135,72 @@ export class McpManager implements IMcpManager {
       this._serversChanged.emit();
     }
 
-    // notify the backend only if some changes occurred.
     if (serversChanged) {
       this._notifyBackend();
     }
   }
 
   /**
-   * Get all available MCP servers (from both settings and backend config).
+   * Merged list of all servers (settings + backend).
+   * Intended for external consumers such as MCP clients.
    */
-  getServers(): IMcpServerEntry[] {
+  getMCPServers(): IMcpServerEntry[] {
     return this._servers;
   }
 
   /**
-   * Get a specific MCP server by name.
+   * Get an MCP server given its name.
    */
-  getServer(name: string): IMcpServerEntry | null {
+  getMCPServer(name: string): IMcpServerEntry | null {
     return this._servers.find(s => s.name === name) ?? null;
   }
 
   /**
-   * Save MCP server configuration to user settings or config.
+   * Raw list of backend config-file servers.
+   * Intended for the settings panel.
    */
-  async saveServer(entry: IMcpServerEntry): Promise<void> {
-    const { editable, deletable, source, config_file, ...server } = entry;
-    if (source === 'backend') {
-      this._saveBackendServer(server);
-    } else {
-      this._saveSettingsServer(server);
-    }
+  getBackendMCPServers(): IMcpServerEntry[] {
+    return this._backendServers;
   }
 
   /**
-   * Save MCP server configuration to user config.
+   * Persist a backend server via the REST API and refresh the backend list.
    */
-  private async _saveBackendServer(server: IMcpServer): Promise<void> {
-    await requestAPI<any>('servers', this._serverSettings, {
+  async saveBackendServer(server: IMcpServer): Promise<void> {
+    await requestAPI<void>('servers', this._serverSettings, {
       method: 'PUT',
       body: JSON.stringify(server),
       headers: { 'Content-Type': 'application/json' }
     });
-    await this._loadServers();
+    await this._loadBackendServers(true);
+    this._rebuildMergedList();
   }
 
   /**
-   * Save MCP server configuration to user settings.
-   */
-  private async _saveSettingsServer(server: IMcpServer): Promise<void> {
-    if (!this._settings) {
-      throw new Error('Settings not loaded');
-    }
-
-    const current = this._settings.get('mcpSettings').composite as {
-      mcp_servers?: IMcpServer[];
-    } | null;
-    const list = current?.mcp_servers ?? [];
-    const idx = list.findIndex(s => s.name === server.name);
-    const updated =
-      idx >= 0
-        ? list.map((s, i) => (i === idx ? server : s))
-        : [...list, server];
-
-    await this._settings.set(
-      'mcpSettings',
-      JSON.parse(JSON.stringify({ mcp_servers: updated }))
-    );
-  }
-
-  /**
-   * Delete an MCP server from user settings.
-   */
-  async deleteServer(name: string): Promise<void> {
-    if (!this._settings) {
-      throw new Error('Settings not loaded');
-    }
-
-    const server = this.getServer(name);
-    if (server?.source !== 'settings') {
-      return;
-    }
-
-    const current = this._settings.get('mcpSettings').composite as {
-      mcp_servers?: IMcpServer[];
-    } | null;
-    const updated = (current?.mcp_servers ?? []).filter(s => s.name !== name);
-
-    await this._settings.set(
-      'mcpSettings',
-      JSON.parse(JSON.stringify({ mcp_servers: updated }))
-    );
-  }
-
-  /**
-   * Refresh the list of MCP servers.
+   * Refresh the list of backend servers.
    */
   async refresh(): Promise<void> {
-    await this._loadServers(true);
+    await this._loadBackendServers(true);
+    this._rebuildMergedList();
   }
 
-  private _serverSettings: any;
-  private _settings: ISettingRegistry.ISettings | null = null;
+  private _serverSettings: ServerConnection.ISettings;
+  private _settings: ISettingRegistry.ISettings | null;
   private _servers: IMcpServerEntry[];
+  private _backendServers: IMcpServerEntry[];
   private _serversChanged = new Signal<IMcpManager, void>(this);
+  private _backendServersChanged = new Signal<IMcpManager, void>(this);
+}
+
+/**
+ * The MCP manager namespace.
+ */
+export namespace McpManager {
+  /**
+   * The options for the MCP manager constructor.
+   */
+  export interface IOptions {
+    serverSettings: ServerConnection.ISettings;
+    settings?: ISettingRegistry.ISettings;
+  }
 }

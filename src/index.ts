@@ -22,33 +22,33 @@ const plugin: JupyterFrontEndPlugin<IMcpManager> = {
   autoStart: true,
   provides: IMcpManager,
   optional: [IFormRendererRegistry, ISettingRegistry, ITranslator],
-  activate: (
+  activate: async (
     app: JupyterFrontEnd,
     formRenderer: IFormRendererRegistry | null,
     settingRegistry: ISettingRegistry | null,
     translator: ITranslator | null
-  ): IMcpManager => {
+  ): Promise<IMcpManager> => {
     console.log('JupyterLab extension jupyter-mcp-manager is activated!');
 
     const trans = translator ?? nullTranslator;
     const serverSettings = app.serviceManager.serverSettings;
 
-    // Create the MCP manager (source of truth)
-    if (!settingRegistry) {
-      throw new Error('ISettingRegistry is required for jupyter-mcp-manager');
-    }
+    const settings = await settingRegistry?.load(PLUGIN_IDS.manager);
 
-    const manager = new McpManager(serverSettings, settingRegistry);
+    const manager = new McpManager({ serverSettings, settings });
 
     // Register settings panel
-    formRenderer?.addRenderer(`${plugin.id}.mcpSettings`, {
-      fieldRenderer: (props: any) =>
-        McpServersSettings({
-          manager,
-          translator: trans,
-          ...props
-        })
-    });
+    if (settings) {
+      formRenderer?.addRenderer(`${plugin.id}.mcpSettings`, {
+        fieldRenderer: (props: any) =>
+          McpServersSettings({
+            manager,
+            settings,
+            translator: trans,
+            ...props
+          })
+      });
+    }
 
     return manager;
   }
