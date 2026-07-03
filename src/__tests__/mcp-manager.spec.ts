@@ -227,7 +227,12 @@ describe('McpManager', () => {
       serverSettings: mockServerSettings,
       settings: makeSettings([
         { name: 'enabled', type: 'stdio', command: '/usr/bin/enabled' },
-        { name: 'disabled', type: 'stdio', command: '/usr/bin/disabled', disabled: true }
+        {
+          name: 'disabled',
+          type: 'stdio',
+          command: '/usr/bin/disabled',
+          disabled: true
+        }
       ]) as any
     });
     await waitForSignal(manager, 'serversChanged');
