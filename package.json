@@ -57,7 +57,10 @@
         "watch:labextension": "jupyter labextension watch ."
     },
     "dependencies": {
+        "@emotion/react": "^11.0.0",
+        "@emotion/styled": "^11.0.0",
         "@jupyterlab/application": "^4.0.0",
+        "@jupyterlab/apputils": "^4.0.0",
         "@jupyterlab/coreutils": "^6.0.0",
         "@jupyterlab/rendermime": "^4.0.0",
         "@jupyterlab/services": "^7.0.0",
@@ -67,6 +70,8 @@
         "@lumino/algorithm": "^2.0.4",
         "@lumino/coreutils": "^2.2.2",
         "@lumino/signaling": "^2.1.5",
+        "@mui/icons-material": "^7.0.0",
+        "@mui/material": "^7.0.0",
         "react": "^18.0.0"
     },
     "devDependencies": {

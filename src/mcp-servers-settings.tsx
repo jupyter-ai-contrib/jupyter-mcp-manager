@@ -1,16 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { IThemeManager } from '@jupyterlab/apputils';
 import { IRenderMime } from '@jupyterlab/rendermime';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator } from '@jupyterlab/translation';
-import {
-  Button,
-  checkIcon,
-  closeIcon,
-  deleteIcon,
-  editIcon,
-  refreshIcon,
-  settingsIcon
-} from '@jupyterlab/ui-components';
+
+import Add from '@mui/icons-material/Add';
+import Cable from '@mui/icons-material/Cable';
+import Delete from '@mui/icons-material/Delete';
+import Edit from '@mui/icons-material/Edit';
+import MoreVert from '@mui/icons-material/MoreVert';
+import Refresh from '@mui/icons-material/Refresh';
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import IconButton from '@mui/material/IconButton';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
+import Switch from '@mui/material/Switch';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 
 import {
   IEnvVariable,
@@ -22,13 +39,29 @@ import {
   IMcpServerStdio
 } from './tokens';
 
+const SWITCH_CLASS = 'jp-mcp-settings-switch';
+
 interface IMcpServerPanelProps {
   manager: IMcpManager;
   settings: ISettingRegistry.ISettings;
   translator: ITranslator;
+  themeManager?: IThemeManager;
 }
 
-interface IServerTableProps {
+/**
+ * Create a theme that uses IThemeManager to detect theme
+ * @param themeManager - Optional theme manager to detect theme
+ * @returns A Material-UI theme configured for the current JupyterLab theme
+ */
+const createJupyterLabTheme = (themeManager?: IThemeManager) => {
+  // Use IThemeManager if available, otherwise default to light theme
+  const isDark = themeManager?.theme
+    ? !themeManager.isLight(themeManager.theme)
+    : false;
+  return createTheme({ palette: { mode: isDark ? 'dark' : 'light' } });
+};
+
+interface IServerListProps {
   servers: IMcpServerEntry[];
   onDelete: (name: string) => void;
   onSave: (server: IMcpServerEntry) => void;
@@ -37,415 +70,353 @@ interface IServerTableProps {
   trans: IRenderMime.TranslationBundle;
 }
 
-interface IRowProps {
-  server: IMcpServerEntry;
-  isEditing: boolean;
-  isNew?: boolean;
-  onStartEdit: () => void;
-  onSave: (server: IMcpServerEntry) => void;
-  onCancel: () => void;
-  onDelete: (name: string) => void;
-  onOpenAdvanced: () => void;
-  onToggleDisabled: (server: IMcpServerEntry) => void;
-  trans: IRenderMime.TranslationBundle;
-}
-
-interface IAdvancedSettingsPopupProps {
-  server: IMcpServerEntry;
+interface IEditDialogProps {
+  open: boolean;
+  server: IMcpServerEntry | null; // null = add new
   onClose: () => void;
   onSave: (server: IMcpServerEntry) => void;
   trans: IRenderMime.TranslationBundle;
 }
 
-const EMPTY_STDIO: IMcpServerEntry = {
-  name: '',
-  type: 'stdio',
-  command: '',
-  editable: true,
-  deletable: true,
-  source: 'settings',
-  config_file: ''
-};
-
-const AdvancedSettingsPopup: React.FC<IAdvancedSettingsPopupProps> = ({
+const EditServerDialog: React.FC<IEditDialogProps> = ({
+  open,
   server,
   onClose,
   onSave,
   trans
 }) => {
-  const stdioServer =
-    server.type === 'stdio'
-      ? (server as IMcpServerStdio & IMcpServerEntry)
-      : null;
-  const httpServer =
-    server.type === 'http'
-      ? (server as IMcpServerHttp & IMcpServerEntry)
-      : null;
-  const isEditable = server.editable;
+  const isNew = server === null;
+  const isEditable = isNew || server.editable;
 
-  const [args, setArgs] = useState<string[]>(stdioServer?.args ?? []);
-  const [env, setEnv] = useState<IEnvVariable[]>(stdioServer?.env ?? []);
-  const [headers, setHeaders] = useState<IHttpHeader[]>(
-    httpServer?.headers ?? []
-  );
+  const [name, setName] = useState('');
+  const [type, setType] = useState<'stdio' | 'http'>('http');
+  const [command, setCommand] = useState('');
+  const [url, setUrl] = useState('');
+  const [args, setArgs] = useState<string[]>([]);
+  const [env, setEnv] = useState<IEnvVariable[]>([]);
+  const [headers, setHeaders] = useState<IHttpHeader[]>([]);
 
   useEffect(() => {
-    setArgs(stdioServer?.args ?? []);
-    setEnv(stdioServer?.env ?? []);
-    setHeaders(httpServer?.headers ?? []);
-  }, [server]);
+    if (!open) return;
+    const t = server?.type ?? 'http';
+    const stdio = t === 'stdio' ? (server as IMcpServerStdio) : null;
+    const http = t === 'http' ? (server as IMcpServerHttp) : null;
+    setName(server?.name ?? '');
+    setType(t);
+    setCommand(stdio?.command ?? '');
+    setUrl(http?.url ?? '');
+    setArgs(stdio?.args ?? []);
+    setEnv(stdio?.env ?? []);
+    setHeaders(http?.headers ?? []);
+  }, [open, server]);
+
+  const handleTypeChange = (newType: 'stdio' | 'http') => {
+    setType(newType);
+    setCommand('');
+    setUrl('');
+    setArgs([]);
+    setEnv([]);
+    setHeaders([]);
+  };
 
   const handleSave = () => {
-    if (stdioServer) {
-      onSave({ ...stdioServer, args, env });
-    } else if (httpServer) {
-      onSave({ ...httpServer, headers });
-    }
+    if (isNew && !name) return;
+    const meta = {
+      name: isNew ? name : server!.name,
+      editable: server?.editable ?? true,
+      deletable: server?.deletable ?? true,
+      source: server?.source ?? ('settings' as const),
+      config_file: server?.config_file ?? ''
+    };
+    const saved: IMcpServerEntry =
+      type === 'stdio'
+        ? { ...meta, type: 'stdio', command, args, env }
+        : { ...meta, type: 'http', url, headers };
+    onSave(saved);
+    onClose();
   };
 
   const addArg = () => setArgs([...args, '']);
-  const updateArg = (i: number, value: string) => {
+  const updateArg = (i: number, v: string) => {
     const next = [...args];
-    next[i] = value;
+    next[i] = v;
     setArgs(next);
   };
   const removeArg = (i: number) => setArgs(args.filter((_, j) => j !== i));
 
   const addEnv = () => setEnv([...env, { name: '', value: '' }]);
-  const updateEnv = (i: number, field: 'name' | 'value', value: string) => {
+  const updateEnv = (i: number, field: 'name' | 'value', v: string) => {
     const next = [...env];
-    next[i] = { ...next[i], [field]: value };
+    next[i] = { ...next[i], [field]: v };
     setEnv(next);
   };
   const removeEnv = (i: number) => setEnv(env.filter((_, j) => j !== i));
 
   const addHeader = () => setHeaders([...headers, { name: '', value: '' }]);
-  const updateHeader = (i: number, field: 'name' | 'value', value: string) => {
+  const updateHeader = (i: number, field: 'name' | 'value', v: string) => {
     const next = [...headers];
-    next[i] = { ...next[i], [field]: value };
+    next[i] = { ...next[i], [field]: v };
     setHeaders(next);
   };
   const removeHeader = (i: number) =>
     setHeaders(headers.filter((_, j) => j !== i));
 
   const originLabel =
-    server.source === 'settings'
+    server?.source === 'settings'
       ? trans.__('JupyterLab Settings')
       : isEditable
         ? trans.__('User config')
         : trans.__('System config');
 
+  const title = isNew
+    ? trans.__('Add Server')
+    : isEditable
+      ? trans.__('Edit Server')
+      : trans.__('Server Details');
+
   return (
-    <div className="jp-mcp-popup-overlay" onClick={onClose}>
-      <div
-        className="jp-mcp-popup"
-        onClick={e => e.stopPropagation()}
-        onKeyDown={e => {
-          e.stopPropagation();
-          if (e.key === 'Enter') {
-            e.preventDefault();
-          }
-        }}
-      >
-        <div className="jp-mcp-popup-header">
-          <span>
-            {server.name} — {trans.__('Advanced Settings')}
-          </span>
-          <Button onClick={onClose} title={trans.__('Close')}>
-            <closeIcon.react />
-          </Button>
-        </div>
-        <div className="jp-mcp-popup-body">
-          {stdioServer && (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          {isNew && (
+            <TextField
+              label={trans.__('Name')}
+              value={name}
+              onChange={e => setName(e.target.value)}
+              size="small"
+              fullWidth
+              required
+            />
+          )}
+          <TextField
+            select
+            label={trans.__('Type')}
+            value={type}
+            onChange={e => handleTypeChange(e.target.value as 'stdio' | 'http')}
+            size="small"
+            disabled={!isEditable}
+          >
+            <MenuItem value="stdio">{trans.__('stdio')}</MenuItem>
+            <MenuItem value="http">{trans.__('http')}</MenuItem>
+          </TextField>
+          {type === 'stdio' ? (
+            <TextField
+              label={trans.__('Command')}
+              value={command}
+              onChange={e => setCommand(e.target.value)}
+              size="small"
+              fullWidth
+              disabled={!isEditable}
+            />
+          ) : (
+            <TextField
+              label={trans.__('URL')}
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              size="small"
+              fullWidth
+              disabled={!isEditable}
+            />
+          )}
+
+          {/* Advanced: args / env vars / HTTP headers */}
+          {type === 'stdio' && (
             <>
-              <div className="jp-mcp-popup-section">
-                <h4>{trans.__('Arguments')}</h4>
-                {!args.length && (
-                  <em className="jp-mcp-empty">{trans.__('No arguments.')}</em>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant="subtitle2">
+                  {trans.__('Arguments')}
+                </Typography>
+                {args.length === 0 && (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontStyle: 'italic' }}
+                  >
+                    {trans.__('No arguments.')}
+                  </Typography>
                 )}
                 {args.map((arg, i) => (
-                  <div key={i} className="jp-mcp-arg-row">
-                    <input
+                  <Box
+                    key={i}
+                    sx={{ display: 'flex', gap: 1, alignItems: 'center' }}
+                  >
+                    <TextField
                       value={arg}
                       disabled={!isEditable}
                       onChange={e => updateArg(i, e.target.value)}
+                      size="small"
+                      fullWidth
                     />
                     {isEditable && (
-                      <Button
+                      <IconButton
+                        size="small"
                         onClick={() => removeArg(i)}
                         title={trans.__('Remove')}
                       >
-                        <closeIcon.react />
-                      </Button>
+                        <Delete fontSize="small" />
+                      </IconButton>
                     )}
-                  </div>
+                  </Box>
                 ))}
                 {isEditable && (
-                  <button
-                    type="button"
-                    className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
+                  <Button
+                    size="small"
                     onClick={addArg}
+                    sx={{ alignSelf: 'flex-start' }}
                   >
                     {trans.__('Add')}
-                  </button>
+                  </Button>
                 )}
-              </div>
-              <div className="jp-mcp-popup-section">
-                <h4>{trans.__('Environment Variables')}</h4>
-                {!env.length && (
-                  <em className="jp-mcp-empty">
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant="subtitle2">
+                  {trans.__('Environment Variables')}
+                </Typography>
+                {env.length === 0 && (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontStyle: 'italic' }}
+                  >
                     {trans.__('No environment variables.')}
-                  </em>
+                  </Typography>
                 )}
                 {env.map((envVar, i) => (
-                  <div key={i} className="jp-mcp-kv-row">
-                    <input
+                  <Box
+                    key={i}
+                    sx={{ display: 'flex', gap: 1, alignItems: 'center' }}
+                  >
+                    <TextField
                       value={envVar.name}
                       placeholder={trans.__('Name')}
                       disabled={!isEditable}
                       onChange={e => updateEnv(i, 'name', e.target.value)}
+                      size="small"
                     />
-                    <input
+                    <TextField
                       value={envVar.value}
                       placeholder={trans.__('Value')}
                       disabled={!isEditable}
                       onChange={e => updateEnv(i, 'value', e.target.value)}
+                      size="small"
                     />
                     {isEditable && (
-                      <Button
+                      <IconButton
+                        size="small"
                         onClick={() => removeEnv(i)}
                         title={trans.__('Remove')}
                       >
-                        <closeIcon.react />
-                      </Button>
+                        <Delete fontSize="small" />
+                      </IconButton>
                     )}
-                  </div>
+                  </Box>
                 ))}
                 {isEditable && (
-                  <button
-                    type="button"
-                    className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
+                  <Button
+                    size="small"
                     onClick={addEnv}
+                    sx={{ alignSelf: 'flex-start' }}
                   >
                     {trans.__('Add')}
-                  </button>
+                  </Button>
                 )}
-              </div>
+              </Box>
             </>
           )}
-          {httpServer && (
-            <div className="jp-mcp-popup-section">
-              <h4>{trans.__('HTTP Headers')}</h4>
-              {!headers.length && (
-                <em className="jp-mcp-empty">{trans.__('No HTTP headers.')}</em>
+          {type === 'http' && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Typography variant="subtitle2">
+                {trans.__('HTTP Headers')}
+              </Typography>
+              {headers.length === 0 && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontStyle: 'italic' }}
+                >
+                  {trans.__('No HTTP headers.')}
+                </Typography>
               )}
               {headers.map((header, i) => (
-                <div key={i} className="jp-mcp-kv-row">
-                  <input
+                <Box
+                  key={i}
+                  sx={{ display: 'flex', gap: 1, alignItems: 'center' }}
+                >
+                  <TextField
                     value={header.name}
                     placeholder={trans.__('Name')}
                     disabled={!isEditable}
                     onChange={e => updateHeader(i, 'name', e.target.value)}
+                    size="small"
                   />
-                  <input
+                  <TextField
                     value={header.value}
                     placeholder={trans.__('Value')}
                     disabled={!isEditable}
                     onChange={e => updateHeader(i, 'value', e.target.value)}
+                    size="small"
                   />
                   {isEditable && (
-                    <Button
+                    <IconButton
+                      size="small"
                       onClick={() => removeHeader(i)}
                       title={trans.__('Remove')}
                     >
-                      <closeIcon.react />
-                    </Button>
+                      <Delete fontSize="small" />
+                    </IconButton>
                   )}
-                </div>
+                </Box>
               ))}
               {isEditable && (
-                <button
-                  type="button"
-                  className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
+                <Button
+                  size="small"
                   onClick={addHeader}
+                  sx={{ alignSelf: 'flex-start' }}
                 >
                   {trans.__('Add')}
-                </button>
+                </Button>
               )}
-            </div>
+            </Box>
           )}
-          <div className="jp-mcp-popup-section">
-            <h4>{trans.__('Config file')}</h4>
-            <div className="jp-mcp-origin">{originLabel}</div>
-            {server.config_file && (
-              <div className="jp-mcp-config-file">{server.config_file}</div>
-            )}
-          </div>
-        </div>
-        <div className="jp-mcp-popup-footer">
-          <button
-            type="button"
-            className="jp-mod-styled jp-mod-reject"
-            onClick={onClose}
+
+          {/* Config file (existing servers only) */}
+          {!isNew && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              <Typography variant="subtitle2">
+                {trans.__('Config file')}
+              </Typography>
+              <Typography variant="body2">{originLabel}</Typography>
+              {server.config_file && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                >
+                  {server.config_file}
+                </Typography>
+              )}
+            </Box>
+          )}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>{trans.__('Cancel')}</Button>
+        {isEditable && (
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            disabled={isNew && !name}
           >
-            {trans.__('Cancel')}
-          </button>
-          {isEditable && (
-            <button
-              type="button"
-              className="jp-mod-styled jp-mod-accept"
-              onClick={handleSave}
-            >
-              {trans.__('Save')}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+            {trans.__('Save')}
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
   );
 };
 
-const Row: React.FC<IRowProps> = ({
-  server,
-  isEditing,
-  isNew,
-  onStartEdit,
-  onSave,
-  onCancel,
-  onDelete,
-  onOpenAdvanced,
-  onToggleDisabled,
-  trans
-}) => {
-  const [draft, setDraft] = useState<IMcpServerEntry>({ ...server });
-
-  useEffect(() => {
-    if (isEditing) {
-      setDraft({ ...server });
-    }
-  }, [isEditing]);
-
-  const setDraftType = (type: 'stdio' | 'http') => {
-    if (type === 'stdio') {
-      setDraft({
-        name: draft.name,
-        type: 'stdio',
-        command: '',
-        editable: draft.editable,
-        deletable: draft.deletable,
-        source: draft.source,
-        config_file: draft.config_file
-      });
-    } else {
-      setDraft({
-        name: draft.name,
-        type: 'http',
-        url: '',
-        editable: draft.editable,
-        deletable: draft.deletable,
-        source: draft.source,
-        config_file: draft.config_file
-      });
-    }
-  };
-
-  const handleSave = () => {
-    if (isNew && !draft.name) return;
-    onSave(draft);
-  };
-
-  if (!isEditing) {
-    return (
-      <tr className={server.disabled ? 'jp-mcp-disabled' : ''}>
-        <td>{server.name}</td>
-        <td>{server.type || 'stdio'}</td>
-        <td>{server.type === 'stdio' ? server.command : server.url}</td>
-        <td>
-          <input
-            type="checkbox"
-            checked={!server.disabled}
-            onChange={() => onToggleDisabled(server)}
-            title={server.disabled ? trans.__('Enable') : trans.__('Disable')}
-            className="jp-mcp-enabled-checkbox"
-          />
-          <Button
-            onClick={onStartEdit}
-            title={trans.__('Edit')}
-            style={{ visibility: server.editable ? 'visible' : 'hidden' }}
-          >
-            <editIcon.react />
-          </Button>
-          <Button
-            onClick={onOpenAdvanced}
-            title={trans.__('Advanced settings')}
-          >
-            <settingsIcon.react />
-          </Button>
-          <Button
-            onClick={() => onDelete(server.name)}
-            title={trans.__('Delete')}
-            style={{ visibility: server.deletable ? 'visible' : 'hidden' }}
-          >
-            <deleteIcon.react />
-          </Button>
-        </td>
-      </tr>
-    );
-  }
-
-  return (
-    <tr>
-      <td>
-        {isNew ? (
-          <input
-            value={draft.name}
-            placeholder={trans.__('Name')}
-            onChange={e => setDraft({ ...draft, name: e.target.value })}
-          />
-        ) : (
-          draft.name
-        )}
-      </td>
-      <td>
-        <select
-          value={draft.type}
-          onChange={e => setDraftType(e.target.value as 'stdio' | 'http')}
-        >
-          <option value="stdio">{trans.__('stdio')}</option>
-          <option value="http">{trans.__('http')}</option>
-        </select>
-      </td>
-      <td>
-        {draft.type === 'stdio' ? (
-          <input
-            value={draft.command}
-            onChange={e => setDraft({ ...draft, command: e.target.value })}
-          />
-        ) : (
-          <input
-            value={draft.url}
-            onChange={e =>
-              setDraft({
-                ...(draft as IMcpServerHttp & IMcpServerEntry),
-                url: e.target.value
-              })
-            }
-          />
-        )}
-      </td>
-      <td>
-        <Button onClick={handleSave} title={trans.__('Save')}>
-          <checkIcon.react />
-        </Button>
-        <Button onClick={onCancel} title={trans.__('Cancel')}>
-          <closeIcon.react />
-        </Button>
-      </td>
-    </tr>
-  );
-};
-
-const ServerTable: React.FC<IServerTableProps> = ({
+const McpServerList: React.FC<IServerListProps> = ({
   servers,
   onDelete,
   onSave,
@@ -453,123 +424,235 @@ const ServerTable: React.FC<IServerTableProps> = ({
   onToggleDisabled,
   trans
 }) => {
-  const [editingName, setEditingName] = useState<string | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
-  const [advancedServer, setAdvancedServer] = useState<IMcpServerEntry | null>(
-    null
-  );
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [menuServer, setMenuServer] = useState<IMcpServerEntry | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editServer, setEditServer] = useState<IMcpServerEntry | null>(null);
 
-  const startEdit = (name: string) => {
-    setEditingName(name);
-    setIsAdding(false);
+  const handleMenuOpen = (
+    event: React.MouseEvent<HTMLElement>,
+    server: IMcpServerEntry
+  ) => {
+    setMenuAnchor(event.currentTarget);
+    setMenuServer(server);
   };
 
-  const startAdd = () => {
-    setEditingName(null);
-    setIsAdding(true);
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+    setMenuServer(null);
   };
 
-  const stopEditing = () => {
-    setEditingName(null);
-    setIsAdding(false);
+  const handleOpenDialog = (server: IMcpServerEntry | null) => {
+    setEditServer(server);
+    setEditDialogOpen(true);
+    handleMenuClose();
   };
 
-  const handleSave = (server: IMcpServerEntry) => {
+  const handleDelete = () => {
+    if (menuServer) onDelete(menuServer.name);
+    handleMenuClose();
+  };
+
+  const handleEditClose = () => {
+    setEditDialogOpen(false);
+    setEditServer(null);
+  };
+
+  const handleEditSave = (server: IMcpServerEntry) => {
     onSave(server);
-    stopEditing();
-  };
-
-  const handleAdvancedSave = (server: IMcpServerEntry) => {
-    onSave(server);
-    setAdvancedServer(null);
+    handleEditClose();
   };
 
   return (
-    <>
-      <table className="jp-mcp-table">
-        <thead>
-          <tr>
-            <th>{trans.__('Name')}</th>
-            <th>{trans.__('Type')}</th>
-            <th>{trans.__('Command/URL')}</th>
-            <th>
-              {trans.__('Actions')}
-              <Button
-                onClick={onRefresh}
-                title={trans.__('Refresh server list')}
-              >
-                <refreshIcon.react />
-              </Button>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {servers.length === 0 && !isAdding && (
-            <tr>
-              <td colSpan={4} className="jp-mcp-empty">
-                {trans.__('No servers configured.')}
-              </td>
-            </tr>
-          )}
-          {servers.map(server => (
-            <Row
-              key={server.name}
-              server={server}
-              isEditing={editingName === server.name}
-              onStartEdit={() => startEdit(server.name)}
-              onSave={handleSave}
-              onCancel={stopEditing}
-              onDelete={onDelete}
-              onOpenAdvanced={() => setAdvancedServer(server)}
-              onToggleDisabled={onToggleDisabled}
-              trans={trans}
-            />
-          ))}
-          {isAdding && (
-            <Row
-              key="__new__"
-              server={{ ...EMPTY_STDIO }}
-              isEditing={true}
-              isNew={true}
-              onStartEdit={() => {}}
-              onSave={handleSave}
-              onCancel={stopEditing}
-              onDelete={onDelete}
-              onOpenAdvanced={() => {}}
-              onToggleDisabled={() => {}}
-              trans={trans}
-            />
-          )}
-        </tbody>
-      </table>
-      <button
-        type="button"
-        className="jp-mod-styled jp-mod-reject jp-ArrayOperationsButton"
-        onClick={startAdd}
+    <Box>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 2
+        }}
       >
-        {trans.__('Add')}
-      </button>
-      {advancedServer && (
-        <AdvancedSettingsPopup
-          server={advancedServer}
-          onClose={() => setAdvancedServer(null)}
-          onSave={handleAdvancedSave}
-          trans={trans}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Cable color="primary" />
+          <Typography variant="h6" component="h2">
+            {trans.__('MCP Servers')}
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <IconButton
+            onClick={onRefresh}
+            size="small"
+            title={trans.__('Refresh server list')}
+          >
+            <Refresh />
+          </IconButton>
+          <Button
+            variant="contained"
+            startIcon={<Add />}
+            onClick={() => handleOpenDialog(null)}
+            size="small"
+          >
+            {trans.__('Add Server')}
+          </Button>
+        </Box>
+      </Box>
+
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {trans.__(
+          "Configure MCP servers to extend JupyterLab's capabilities with external tools and data sources."
+        )}
+      </Typography>
+
+      {servers.length === 0 ? (
+        <Alert severity="info">
+          {trans.__(
+            'No MCP servers configured. Click "Add Server" to get started.'
+          )}
+        </Alert>
+      ) : (
+        <List disablePadding>
+          {servers.map(server => {
+            const sourceLabel =
+              server.source === 'settings'
+                ? trans.__('Settings')
+                : server.editable
+                  ? trans.__('User config')
+                  : trans.__('System config');
+
+            return (
+              <ListItem
+                key={server.name}
+                divider
+                secondaryAction={
+                  <IconButton
+                    edge="end"
+                    size="small"
+                    onClick={e => handleMenuOpen(e, server)}
+                    title={trans.__('Actions')}
+                  >
+                    <MoreVert />
+                  </IconButton>
+                }
+              >
+                <ListItemText
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography
+                        variant="body1"
+                        sx={{ opacity: server.disabled ? 0.5 : 1 }}
+                      >
+                        {server.name}
+                      </Typography>
+                      <Switch
+                        className={SWITCH_CLASS}
+                        checked={!server.disabled}
+                        onClick={e => {
+                          e.stopPropagation();
+                          onToggleDisabled(server);
+                        }}
+                        size="small"
+                        color="primary"
+                        readOnly
+                      />
+                    </Box>
+                  }
+                  secondary={
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.5,
+                        opacity: server.disabled ? 0.5 : 1
+                      }}
+                    >
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          fontFamily: 'monospace',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          display: 'block'
+                        }}
+                      >
+                        {server.type === 'stdio'
+                          ? (server as IMcpServerStdio & IMcpServerEntry)
+                              .command
+                          : (server as IMcpServerHttp & IMcpServerEntry).url}
+                      </Typography>
+                      <Box component="span" sx={{ display: 'flex', gap: 0.5 }}>
+                        <Chip
+                          label={server.type || 'stdio'}
+                          size="small"
+                          color={server.type === 'http' ? 'warning' : 'primary'}
+                          variant="outlined"
+                        />
+                        <Chip
+                          label={sourceLabel}
+                          size="small"
+                          variant="outlined"
+                        />
+                      </Box>
+                    </Box>
+                  }
+                />
+              </ListItem>
+            );
+          })}
+        </List>
       )}
-    </>
+
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+      >
+        <MenuItem onClick={() => handleOpenDialog(menuServer)}>
+          <Edit fontSize="small" sx={{ mr: 1 }} />
+          {menuServer?.editable ? trans.__('Edit') : trans.__('View details')}
+        </MenuItem>
+        {menuServer?.deletable && (
+          <MenuItem onClick={handleDelete}>
+            <Delete fontSize="small" sx={{ mr: 1 }} />
+            {trans.__('Delete')}
+          </MenuItem>
+        )}
+      </Menu>
+
+      <EditServerDialog
+        open={editDialogOpen}
+        server={editServer}
+        onClose={handleEditClose}
+        onSave={handleEditSave}
+        trans={trans}
+      />
+    </Box>
   );
 };
 
 export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
   manager,
   settings,
-  translator
+  translator,
+  themeManager
 }) => {
   const trans = translator.load('jupyter-mcp-manager');
   const [error, setError] = useState<string | null>(null);
+  const [theme, setTheme] = useState(() => createJupyterLabTheme(themeManager));
 
-  // Settings servers and overlay map — initialized synchronously, updated via settings.changed
+  useEffect(() => {
+    if (!themeManager) return;
+    const updateTheme = () => setTheme(createJupyterLabTheme(themeManager));
+    themeManager.themeChanged.connect(updateTheme);
+    return () => {
+      themeManager.themeChanged.disconnect(updateTheme);
+    };
+  }, [themeManager]);
+
   const [settingsMCP, setSettingsMCP] = useState<IMcpServerEntry[]>(
     () => Private.parseSettingsMCP(settings).servers
   );
@@ -577,12 +660,10 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     () => Private.parseSettingsMCP(settings).overlayMap
   );
 
-  // Backend servers — provided by the manager, updated via backendServersChanged
   const [backendMCP, setBackendMCP] = useState<IMcpServerEntry[]>(
     manager.getBackendMCPServers()
   );
 
-  // Subscribe to settings changes
   useEffect(() => {
     const handleSettingsChanged = () => {
       const parsed = Private.parseSettingsMCP(settings);
@@ -596,7 +677,6 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     };
   }, [settings]);
 
-  // Subscribe to backend server changes and trigger an initial fetch
   useEffect(() => {
     const handleBackendChanged = () => {
       setBackendMCP(manager.getBackendMCPServers());
@@ -610,7 +690,6 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     };
   }, [manager]);
 
-  // Merged display list: settings servers take precedence; overlays apply disabled state to backend servers
   const settingsNames = new Set(settingsMCP.map(s => s.name));
   const servers: IMcpServerEntry[] = [
     ...settingsMCP,
@@ -621,11 +700,6 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
       )
   ].sort((a, b) => (a.name < b.name ? -1 : 1));
 
-  /**
-   * Save an MCP server (new or updated).
-   * If the settings comes from backend, delegate it to the manager,
-   * otherwise update the settings from the registry.
-   */
   const handleSave = async (entry: IMcpServerEntry) => {
     const {
       editable,
@@ -637,7 +711,6 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     } = entry as IMcpServerEntry & { disabled?: boolean };
     try {
       if (source === 'backend') {
-        // disabled state lives in the overlay, not the server config
         await manager.saveBackendServer(serverCore);
       } else {
         const server = disabled ? { ...serverCore, disabled } : serverCore;
@@ -654,9 +727,6 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     }
   };
 
-  /**
-   * Delete an MCP server, only available for settings coming from the settings registry.
-   */
   const handleDelete = async (name: string) => {
     const server = servers.find(s => s.name === name);
     if (server?.source !== 'settings') return;
@@ -670,12 +740,8 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     }
   };
 
-  /**
-   * Toggle the disabled state of a server.
-   * For settings servers: updates the `disabled` flag in-place.
-   * For backend servers: adds or removes a thin overlay entry in settings.
-   */
   const handleToggleDisabled = async (entry: IMcpServerEntry) => {
+    const newDisabled = !entry.disabled;
     try {
       const list = Private.getSettingsList(settings);
       if (entry.source === 'settings') {
@@ -683,22 +749,32 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
           settings,
           list.map(s =>
             s.name === entry.name && 'type' in s
-              ? { ...s, disabled: !entry.disabled || undefined }
+              ? { ...s, disabled: newDisabled ? true : undefined }
               : s
           )
         );
       } else {
-        // Remove any existing overlay for this backend server, then re-add if disabling
         const rest = list.filter(
           s => !(s.name === entry.name && !('type' in s))
         );
-        if (!entry.disabled) {
+        if (newDisabled) {
           await Private.writeSettingsList(settings, [
             ...rest,
             { name: entry.name, disabled: true }
           ]);
         } else {
-          await Private.writeSettingsList(settings, rest);
+          // When enabling, check whether the backend server is natively disabled.
+          // If so, write an explicit enabled overlay; otherwise just remove any overlay.
+          const nativeDisabled =
+            backendMCP.find(s => s.name === entry.name)?.disabled ?? false;
+          if (nativeDisabled) {
+            await Private.writeSettingsList(settings, [
+              ...rest,
+              { name: entry.name, disabled: false }
+            ]);
+          } else {
+            await Private.writeSettingsList(settings, rest);
+          }
         }
       }
     } catch {
@@ -706,9 +782,6 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     }
   };
 
-  /**
-   * Refresh the backend MCP server list.
-   */
   const handleRefresh = async () => {
     try {
       await manager.refresh();
@@ -717,26 +790,25 @@ export const McpServersSettings: React.FC<IMcpServerPanelProps> = ({
     }
   };
 
-  if (error) {
-    return <div className="jp-Alert jp-Alert-error">{error}</div>;
-  }
-
   return (
-    <ServerTable
-      servers={servers}
-      onDelete={handleDelete}
-      onSave={handleSave}
-      onRefresh={handleRefresh}
-      onToggleDisabled={handleToggleDisabled}
-      trans={trans}
-    />
+    <ThemeProvider theme={theme}>
+      {error ? (
+        <Alert severity="error">{error}</Alert>
+      ) : (
+        <McpServerList
+          servers={servers}
+          onDelete={handleDelete}
+          onSave={handleSave}
+          onRefresh={handleRefresh}
+          onToggleDisabled={handleToggleDisabled}
+          trans={trans}
+        />
+      )}
+    </ThemeProvider>
   );
 };
 
 namespace Private {
-  /**
-   * Parse settings into server entries and a disabled-overlay map.
-   */
   export function parseSettingsMCP(settings: ISettingRegistry.ISettings): {
     servers: IMcpServerEntry[];
     overlayMap: Map<string, boolean>;
@@ -762,9 +834,6 @@ namespace Private {
     return { servers, overlayMap };
   }
 
-  /**
-   * Get the raw settings list (full entries + thin overlays).
-   */
   export const getSettingsList = (
     settings: ISettingRegistry.ISettings
   ): IMcpServerSettings[] => {
@@ -774,9 +843,6 @@ namespace Private {
     return current?.mcp_servers ?? [];
   };
 
-  /**
-   * Write the raw settings list back to the registry.
-   */
   export const writeSettingsList = async (
     settings: ISettingRegistry.ISettings,
     list: IMcpServerSettings[]

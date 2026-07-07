@@ -2,6 +2,7 @@ import {
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
+import { IThemeManager } from '@jupyterlab/apputils';
 import { ISettingRegistry } from '@jupyterlab/settingregistry';
 import { ITranslator, nullTranslator } from '@jupyterlab/translation';
 import { IFormRendererRegistry } from '@jupyterlab/ui-components';
@@ -21,12 +22,18 @@ const plugin: JupyterFrontEndPlugin<IMcpManager> = {
   description: 'A JupyterLab extension to manage MCP servers.',
   autoStart: true,
   provides: IMcpManager,
-  optional: [IFormRendererRegistry, ISettingRegistry, ITranslator],
+  optional: [
+    IFormRendererRegistry,
+    ISettingRegistry,
+    ITranslator,
+    IThemeManager
+  ],
   activate: async (
     app: JupyterFrontEnd,
     formRenderer: IFormRendererRegistry | null,
     settingRegistry: ISettingRegistry | null,
-    translator: ITranslator | null
+    translator: ITranslator | null,
+    themeManager: IThemeManager | null
   ): Promise<IMcpManager> => {
     console.log('JupyterLab extension jupyter-mcp-manager is activated!');
 
@@ -45,6 +52,7 @@ const plugin: JupyterFrontEndPlugin<IMcpManager> = {
             manager,
             settings,
             translator: trans,
+            themeManager: themeManager ?? undefined,
             ...props
           })
       });
