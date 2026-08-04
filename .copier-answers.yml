@@ -10,6 +10,6 @@ kind: frontend-and-server
 labextension_name: jupyter-mcp-manager
 project_short_description: A JupyterLab extension to manage MCP servers.
 python_name: jupyter_mcp_manager
-repository: https://github.com/brichet/jupyter-mcp-manager
+repository: https://github.com/jupyter-ai-contrib/jupyter-mcp-manager
 test: true
 
