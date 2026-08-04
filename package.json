@@ -7,9 +7,9 @@
         "jupyterlab",
         "jupyterlab-extension"
     ],
-    "homepage": "https://github.com/brichet/jupyter-mcp-manager",
+    "homepage": "https://github.com/jupyter-ai-contrib/jupyter-mcp-manager",
     "bugs": {
-        "url": "https://github.com/brichet/jupyter-mcp-manager/issues"
+        "url": "https://github.com/jupyter-ai-contrib/jupyter-mcp-manager/issues"
     },
     "license": "BSD-3-Clause",
     "author": {
@@ -27,7 +27,7 @@
     "style": "style/index.css",
     "repository": {
         "type": "git",
-        "url": "https://github.com/brichet/jupyter-mcp-manager.git"
+        "url": "https://github.com/jupyter-ai-contrib/jupyter-mcp-manager.git"
     },
     "scripts": {
         "build": "jlpm build:lib && jlpm build:labextension:dev",

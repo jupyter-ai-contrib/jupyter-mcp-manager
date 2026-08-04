@@ -1,6 +1,6 @@
 # jupyter_mcp_manager
 
-[![Github Actions Status](https://github.com/brichet/jupyter-mcp-manager/workflows/Build/badge.svg)](https://github.com/brichet/jupyter-mcp-manager/actions/workflows/build.yml)
+[![Github Actions Status](https://github.com/jupyter-ai-contrib/jupyter-mcp-manager/workflows/Build/badge.svg)](https://github.com/jupyter-ai-contrib/jupyter-mcp-manager/actions/workflows/build.yml)
 
 **A JupyterLab extension for managing Model Context Protocol (MCP) servers.**
 
