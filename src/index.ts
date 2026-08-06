@@ -63,4 +63,4 @@ const plugin: JupyterFrontEndPlugin<IMcpManager> = {
 };
 
 export default plugin;
-export { IMcpManager, IMcpManager as IMcpManagerToken, McpManager };
+export { IMcpManager, McpManager };
